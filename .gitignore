@@ -7,3 +7,6 @@
 # Données régénérables (voir scripts/fetch_events.py et scripts/preprocess_events.py)
 data/raw/
 data/processed/
+
+# Tests
+.pytest_cache/
