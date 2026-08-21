@@ -79,7 +79,11 @@ Exclus, avec une vraie raison à chaque fois :
 - `contributor_email`/`contactnumber`/`contactname`/`contactposition` — données personnelles du contributeur, pas de place dans une donnée exposée publiquement
 - `slug`, `location_uid`, `originagenda_uid`, `image*` — identifiants/médias internes à la plateforme, sans valeur pour répondre à une question
 
-D'autres scripts (vectorisation/indexation) seront ajoutés ici au fil de l'avancement — cette section sera complétée à chaque nouveau script.
+```bash
+uv run python scripts/build_index.py
+```
+
+Génère les embeddings de chaque événement via l'API Mistral (`mistral-embed`, payant — nécessite `MISTRAL_API_KEY` dans `.env`) et construit l'index vectoriel FAISS, sauvegardé dans `data/index/` (`index.faiss` + `index.pkl`). Coût estimé sur ce dataset : ~0,08 $ pour 4244 événements.
 
 ### Tests
 
@@ -92,4 +96,4 @@ Teste la logique de `preprocess_events.py` (exclusion France Travail, normalisat
 ## Statut
 
 Étape 1 — configuration de l'environnement (terminée).
-Étape 2 — pré-processing des données Open Agenda (en cours : récupération faite, nettoyage et vectorisation à venir).
+Étape 2 — pré-processing des données Open Agenda (terminée : récupération, nettoyage, tests unitaires, vectorisation/index FAISS).
