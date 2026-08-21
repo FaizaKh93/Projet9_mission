@@ -81,6 +81,14 @@ Exclus, avec une vraie raison à chaque fois :
 
 D'autres scripts (vectorisation/indexation) seront ajoutés ici au fil de l'avancement — cette section sera complétée à chaque nouveau script.
 
+### Tests
+
+```bash
+uv run pytest tests/ -v
+```
+
+Teste la logique de `preprocess_events.py` (exclusion France Travail, normalisation de casse, extraction du statut, structuration des champs) sur des événements factices — ne nécessite pas d'avoir lancé `fetch_events.py` au préalable.
+
 ## Statut
 
 Étape 1 — configuration de l'environnement (terminée).
