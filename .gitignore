@@ -4,9 +4,10 @@
 # Secrets
 .env
 
-# Données régénérables (voir scripts/fetch_events.py et scripts/preprocess_events.py)
+# Données régénérables (voir scripts/fetch_events.py, preprocess_events.py, build_index.py)
 data/raw/
 data/processed/
+data/index/
 
 # Tests
 .pytest_cache/
