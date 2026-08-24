@@ -10,9 +10,13 @@ from pathlib import Path
 # Ajout de scripts/ au chemin d'import : ce n'est pas un package installé, juste un dossier de scripts.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import pytest
+
 import preprocess_events  # noqa: E402 (import après la manipulation de sys.path, nécessaire ici)
 from preprocess_events import (  # noqa: E402
+    build_known_cities,
     build_text,
+    is_complete,
     is_relevant,
     normalize_city,
     parse_labeled_field,
@@ -59,69 +63,73 @@ def make_event(**overrides) -> dict:
 # --- is_relevant : exclusion des événements hors-sujet (France Travail) ---
 
 
-def test_is_relevant_excludes_france_travail():
-    """Rejeter un événement dont la source est 'Mes événements France Travail'."""
-    event = make_event(originagenda_title="Mes événements France Travail")
-    assert is_relevant(event) is False
-
-
-def test_is_relevant_keeps_other_sources():
-    """Accepter un événement dont la source n'est pas dans la liste d'exclusion."""
-    event = make_event()
-    assert is_relevant(event) is True
+@pytest.mark.parametrize(
+    "originagenda_title, expected",
+    [
+        pytest.param("Mes événements France Travail", False, id="excludes_france_travail"),
+        pytest.param("Ville de Marseille", True, id="keeps_other_sources"),
+    ],
+)
+def test_is_relevant(originagenda_title, expected):
+    """Rejeter uniquement les événements dont la source est 'Mes événements France Travail'."""
+    assert is_relevant(make_event(originagenda_title=originagenda_title)) is expected
 
 
 # --- normalize_city : correction de la casse tout-majuscule ---
 
 
-def test_normalize_city_fixes_all_caps():
-    """Convertir un nom de ville tout-majuscule en casse titre."""
-    assert normalize_city("MARSEILLE") == "Marseille"
-
-
-def test_normalize_city_keeps_correct_mixed_case():
-    # "Aix-en-Provence" n'est pas tout-majuscule : ne doit pas être touché par .title(),
-    # qui produirait "Aix-En-Provence" (majuscule incorrecte sur "En").
-    assert normalize_city("Aix-en-Provence") == "Aix-en-Provence"
-
-
-def test_normalize_city_handles_missing_value():
-    """Renvoyer la valeur telle quelle (None ou chaîne vide) sans lever d'erreur."""
-    assert normalize_city(None) is None
-    assert normalize_city("") == ""
+@pytest.mark.parametrize(
+    "city, expected",
+    [
+        pytest.param("MARSEILLE", "Marseille", id="fixes_all_caps"),
+        # "Aix-en-Provence" n'est pas tout-majuscule : ne doit pas être touché par .title(),
+        # qui produirait "Aix-En-Provence" (majuscule incorrecte sur "En").
+        pytest.param("Aix-en-Provence", "Aix-en-Provence", id="keeps_correct_mixed_case"),
+        pytest.param(None, None, id="handles_none"),
+        pytest.param("", "", id="handles_empty_string"),
+    ],
+)
+def test_normalize_city(city, expected):
+    """Corriger la casse tout-majuscule sans abîmer un nom déjà correct ni planter sur une valeur absente."""
+    assert normalize_city(city) == expected
 
 
 # --- parse_labeled_field : extraction du libellé français depuis un champ JSON imbriqué ---
 
 
-def test_parse_labeled_field_extracts_french_label():
-    """Extraire le libellé français depuis la structure {"id": ..., "label": {"fr": ...}}."""
-    raw = '{"id": 6, "label": {"fr": "Annulé", "en": "Canceled"}}'
-    assert parse_labeled_field(raw) == "Annulé"
-
-
-def test_parse_labeled_field_handles_missing_value():
-    """Renvoyer None si le champ brut est absent, plutôt que de lever une erreur."""
-    assert parse_labeled_field(None) is None
-
-
-def test_parse_labeled_field_handles_malformed_json():
-    """Renvoyer None si le contenu n'est pas du JSON valide, plutôt que de planter."""
-    assert parse_labeled_field("pas du json") is None
+@pytest.mark.parametrize(
+    "raw_value, expected",
+    [
+        pytest.param(
+            '{"id": 6, "label": {"fr": "Annulé", "en": "Canceled"}}', "Annulé", id="extracts_french_label"
+        ),
+        pytest.param(None, None, id="handles_missing_value"),
+        pytest.param("pas du json", None, id="handles_malformed_json"),
+    ],
+)
+def test_parse_labeled_field(raw_value, expected):
+    """Extraire le libellé français, ou renvoyer None proprement (absent / JSON invalide)."""
+    assert parse_labeled_field(raw_value) == expected
 
 
 # --- parse_registration_link : extraction du lien d'inscription depuis un champ JSON imbriqué ---
 
 
-def test_parse_registration_link_extracts_first_link():
-    """Extraire la valeur du premier élément de la liste d'inscription."""
-    raw = '[{"type": "link", "value": "https://example.com/inscription"}]'
-    assert parse_registration_link(raw) == "https://example.com/inscription"
-
-
-def test_parse_registration_link_handles_missing_value():
-    """Renvoyer None si le champ registration est absent."""
-    assert parse_registration_link(None) is None
+@pytest.mark.parametrize(
+    "raw_value, expected",
+    [
+        pytest.param(
+            '[{"type": "link", "value": "https://example.com/inscription"}]',
+            "https://example.com/inscription",
+            id="extracts_first_link",
+        ),
+        pytest.param(None, None, id="handles_missing_value"),
+        pytest.param("pas du json", None, id="handles_malformed_json"),
+    ],
+)
+def test_parse_registration_link(raw_value, expected):
+    """Extraire le premier lien d'inscription, ou renvoyer None proprement (absent / JSON invalide)."""
+    assert parse_registration_link(raw_value) == expected
 
 
 # --- build_text : construction du texte à vectoriser ---
@@ -191,6 +199,97 @@ def test_structure_event_normalizes_city():
     """Appliquer la normalisation de casse à location_city lors de la structuration complète."""
     structured = structure_event(make_event(location_city="MARSEILLE"))
     assert structured["location_city"] == "Marseille"
+
+
+# --- build_known_cities : villes déjà confirmées ailleurs dans le jeu de données ---
+
+
+def test_build_known_cities_keeps_only_cities_with_correct_postalcode():
+    """Ne retenir que les villes associées à un code postal 13xxx quelque part dans les données."""
+    structured_events = [
+        structure_event(make_event(location_city="Marseille", location_postalcode="13001")),
+        structure_event(make_event(location_city="Landerneau", location_postalcode="29800")),
+    ]
+    assert build_known_cities(structured_events) == {"Marseille"}
+
+
+# --- is_complete : exclusion des événements incomplets ou mal géocodés ---
+
+
+@pytest.mark.parametrize(
+    "overrides, known_cities, expected",
+    [
+        pytest.param({}, set(), True, id="accepts_valid_event"),
+        pytest.param(
+            {
+                "title_fr": "", "description_fr": "", "longdescription_fr": "",
+                "conditions_fr": "", "keywords_fr": [],
+            },
+            set(),
+            False,
+            id="rejects_empty_text",
+        ),
+        pytest.param({"firstdate_begin": None}, set(), False, id="rejects_missing_date"),
+        pytest.param({"uid": None}, set(), False, id="rejects_missing_uid"),
+        # Cas réel rencontré : un événement à Landerneau (Finistère, code postal 29800),
+        # avec location_department indiquant à tort "Bouches-du-Rhône", et une ville jamais
+        # confirmée ailleurs dans les données (known_cities vide) : bien exclu.
+        pytest.param(
+            {"location_postalcode": "29800", "location_city": "Landerneau"},
+            set(),
+            False,
+            id="rejects_postalcode_outside_target_department_when_city_unknown",
+        ),
+        # Cas réel rencontré : un événement à Marseille (ville bien connue par ailleurs dans
+        # les données) mais avec un code postal aberrant ("10003", pas même un vrai code
+        # marseillais) — on privilégie la ville, déjà confirmée, plutôt que ce code isolé.
+        pytest.param(
+            {"location_postalcode": "10003", "location_city": "Marseille"},
+            {"Marseille"},
+            True,
+            id="accepts_bad_postalcode_when_city_already_known",
+        ),
+        pytest.param({"location_postalcode": None}, set(), True, id="accepts_missing_postalcode"),
+        pytest.param(
+            {"location_name": None, "location_address": None, "location_city": None},
+            set(),
+            False,
+            id="rejects_in_person_event_without_any_location",
+        ),
+        pytest.param(
+            {
+                "attendancemode": '{"id": 2, "label": {"fr": "En ligne"}}',
+                "onlineaccesslink": "https://example.com/live",
+                "location_name": None, "location_address": None, "location_city": None,
+            },
+            set(),
+            True,
+            id="accepts_online_event_without_location",
+        ),
+        pytest.param(
+            {
+                "attendancemode": '{"id": 2, "label": {"fr": "En ligne"}}',
+                "onlineaccesslink": None, "registration": None,
+            },
+            set(),
+            False,
+            id="rejects_online_event_without_access_link",
+        ),
+        pytest.param(
+            {
+                "attendancemode": '{"id": 2, "label": {"fr": "En ligne"}}',
+                "onlineaccesslink": None,
+                "registration": '[{"type": "link", "value": "https://example.com/inscription"}]',
+            },
+            set(),
+            True,
+            id="accepts_online_event_with_registration_link_only",
+        ),
+    ],
+)
+def test_is_complete(overrides, known_cities, expected):
+    """Vérifier chaque règle primaire (texte, date, uid, code postal, localisation/lien d'accès)."""
+    assert is_complete(structure_event(make_event(**overrides)), known_cities) is expected
 
 
 # --- preprocess : comportement d'ensemble du pipeline de nettoyage ---
