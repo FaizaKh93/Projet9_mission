@@ -1,8 +1,9 @@
 """Nettoie et structure les événements bruts récupérés par fetch_events.py.
 
-Lit data/raw/events.json, exclut les événements hors-sujet (non culturels),
-construit un texte unique par événement (pour la vectorisation à venir),
-et sauvegarde le résultat structuré dans data/processed/events.json.
+Lit data/raw/events.json, exclut les événements hors-sujet (non culturels) et les
+événements incomplets ou mal géocodés (voir is_complete()), construit un texte unique
+par événement (pour la vectorisation à venir), et sauvegarde le résultat structuré
+dans data/processed/events.json.
 
 Choix délibéré : garder le maximum de champs utiles à répondre aux questions des
 utilisateurs (tarifs, âge, accessibilité, contact...), pas seulement titre/description.
@@ -20,6 +21,11 @@ PROCESSED_PATH = Path(__file__).resolve().parent.parent / "data" / "processed" /
 # Source à exclure : événements France Travail (forums emploi, recrutement) — hors-sujet
 # pour un chatbot d'événements culturels, et ~49% du volume brut à eux seuls.
 EXCLUDED_SOURCES = {"Mes événements France Travail"}
+
+# Préfixe attendu pour location_postalcode : les codes postaux des Bouches-du-Rhône
+# commencent tous par 13. Sert à détecter les événements mal géocodés (ex. un événement à
+# Landerneau, code postal 29800, mais avec location_department indiquant à tort "Bouches-du-Rhône").
+TARGET_POSTALCODE_PREFIX = "13"
 
 
 def load_raw_events() -> list[dict]:
@@ -140,15 +146,85 @@ def structure_event(event: dict) -> dict:
     }
 
 
+def build_known_cities(structured_events: list[dict]) -> set[str]:
+    """Construire l'ensemble des noms de ville déjà confirmés dans les Bouches-du-Rhône.
+
+    Une ville est "confirmée" si au moins un événement du jeu de données l'associe à un
+    code postal correct (préfixe 13). Sert de garde-fou contre les faux positifs de
+    is_complete() : un code postal isolé mal saisi (ex. "10003" pour un événement à
+    Marseille) ne doit pas suffire à exclure un événement dont la ville est par ailleurs
+    bien identifiée ailleurs dans les mêmes données.
+    """
+    return {
+        e["location_city"]
+        for e in structured_events
+        if e["location_city"] and e["location_postalcode"] and e["location_postalcode"].startswith(TARGET_POSTALCODE_PREFIX)
+    }
+
+
+def is_complete(structured_event: dict, known_cities: set[str]) -> bool:
+    """Écarter les événements auxquels il manque une information jugée indispensable.
+
+    Contrairement à is_relevant() (qui exclut une source entière avant transformation),
+    ce filtre s'applique après structure_event() et vérifie le résultat final :
+    - texte vide (titre ET description absents) : rien à vectoriser
+    - date de début absente : impossible de dire si l'événement est récent/à venir
+    - uid absent : pas d'identifiant fiable
+    - code postal renseigné mais hors Bouches-du-Rhône (ne commence pas par 13) ET ville
+      absente de known_cities : événement probablement mal géocodé. Si la ville est déjà
+      confirmée ailleurs (ex. "Marseille"), on privilégie location_city — le code postal
+      isolé est plus probablement une erreur de saisie qu'une preuve que l'événement est
+      hors zone (cas réel rencontré : "10003" pour un événement à Marseille).
+    - événement en présentiel (attendance_mode != "En ligne") sans aucune localisation
+    - événement en ligne (attendance_mode == "En ligne") sans aucun lien pour y accéder,
+      symétrique de la règle précédente : personne ne peut savoir comment y participer
+    """
+    if not structured_event["text"]:
+        return False
+    if not structured_event["date_start"]:
+        return False
+    if not structured_event["uid"]:
+        return False
+
+    postal_code = structured_event["location_postalcode"]
+    city = structured_event["location_city"]
+    if postal_code and not postal_code.startswith(TARGET_POSTALCODE_PREFIX) and city not in known_cities:
+        return False
+
+    is_in_person = structured_event["attendance_mode"] != "En ligne"
+    has_location = bool(
+        structured_event["location_name"]
+        or structured_event["location_address"]
+        or structured_event["location_city"]
+    )
+    if is_in_person and not has_location:
+        return False
+
+    is_online = structured_event["attendance_mode"] == "En ligne"
+    has_access_link = bool(structured_event["online_access_link"] or structured_event["registration_link"])
+    if is_online and not has_access_link:
+        return False
+
+    return True
+
+
 def preprocess() -> list[dict]:
     """Filtrer, nettoyer et structurer l'ensemble des événements bruts."""
     raw_events = load_raw_events()
     # Exclusion des sources hors-sujet avant toute autre transformation.
     relevant_events = [e for e in raw_events if is_relevant(e)]
     structured_events = [structure_event(e) for e in relevant_events]
+    # Villes déjà confirmées ailleurs dans le jeu de données, pour ne pas exclure à tort
+    # un événement dont seul le code postal est mal saisi (voir is_complete()).
+    known_cities = build_known_cities(structured_events)
+    # Exclusion des événements incomplets, une fois structurés (voir is_complete()).
+    complete_events = [e for e in structured_events if is_complete(e, known_cities)]
 
-    print(f"{len(raw_events)} événements bruts, {len(structured_events)} conservés après filtrage")
-    return structured_events
+    print(
+        f"{len(raw_events)} événements bruts, {len(relevant_events)} après filtrage de pertinence, "
+        f"{len(complete_events)} après filtrage de complétude"
+    )
+    return complete_events
 
 
 def main() -> None:

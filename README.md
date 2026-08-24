@@ -57,7 +57,7 @@ Récupère les événements culturels des Bouches-du-Rhône de moins d'un an (so
 uv run python scripts/preprocess_events.py
 ```
 
-Nettoie et structure les événements bruts : exclut les sources hors-sujet (forums emploi France Travail, ~49% du volume brut), normalise la casse des noms de ville, extrait les champs utiles (dates, lieu, tarifs, âge, accessibilité, contact...) et construit le texte à vectoriser. Écrit le résultat dans `data/processed/events.json`.
+Nettoie et structure les événements bruts : exclut les sources hors-sujet (forums emploi France Travail, ~49% du volume brut) et les événements incomplets ou mal géocodés (texte vide, date/uid manquants, code postal hors Bouches-du-Rhône, présentiel sans aucune localisation, en ligne sans lien d'accès), normalise la casse des noms de ville, extrait les champs utiles (dates, lieu, tarifs, âge, accessibilité, contact...) et construit le texte à vectoriser. Écrit le résultat dans `data/processed/events.json`.
 
 **Répartition des champs bruts (56) vers `data/processed/events.json` (24 champs structurés + texte vectorisé) :**
 
