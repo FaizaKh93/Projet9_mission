@@ -80,10 +80,16 @@ Exclus, avec une vraie raison à chaque fois :
 - `slug`, `location_uid`, `originagenda_uid`, `image*` — identifiants/médias internes à la plateforme, sans valeur pour répondre à une question
 
 ```bash
+uv run python scripts/vectorize_events.py
+```
+
+Découpe le texte de chaque événement en chunks (`langchain_text_splitters`, les textes courts ne produisent le plus souvent qu'un seul chunk) et génère leurs embeddings via l'API Mistral (`mistral-embed`, payant — nécessite `MISTRAL_API_KEY` dans `.env`). Sauvegarde le résultat dans `data/vectors/events_vectors.json` — **clôture l'Étape 2** ("prêt à être indexé"), sans construire l'index FAISS lui-même (Étape 3). Coût estimé sur ce dataset : ~0,08 $ pour 4241 événements.
+
+```bash
 uv run python scripts/build_index.py
 ```
 
-Génère les embeddings de chaque événement via l'API Mistral (`mistral-embed`, payant — nécessite `MISTRAL_API_KEY` dans `.env`) et construit l'index vectoriel FAISS, sauvegardé dans `data/index/` (`index.faiss` + `index.pkl`). Coût estimé sur ce dataset : ~0,08 $ pour 4244 événements.
+⚠️ Étape 3, pas Étape 2 — construit l'index vectoriel FAISS, sauvegardé dans `data/index/` (`index.faiss` + `index.pkl`). Écrit avant qu'on sépare vectorisation et indexation : revectorise actuellement au lieu de réutiliser `data/vectors/events_vectors.json` via `FAISS.from_embeddings()` — à corriger à l'Étape 3.
 
 ### Tests
 
@@ -96,4 +102,5 @@ Teste la logique de `preprocess_events.py` (exclusion France Travail, normalisat
 ## Statut
 
 Étape 1 — configuration de l'environnement (terminée).
-Étape 2 — pré-processing des données Open Agenda (terminée : récupération, nettoyage, tests unitaires, vectorisation/index FAISS).
+Étape 2 — pré-processing des données Open Agenda (terminée : récupération, nettoyage, tests unitaires, découpage en chunks, vectorisation — 4241 événements en 7169 chunks vectorisés dans `data/vectors/events_vectors.json`).
+Étape 3 — base de données vectorielle FAISS (en cours : index déjà construit via `build_index.py`, à revoir pour réutiliser les vecteurs de `vectorize_events.py` via `FAISS.from_embeddings()` plutôt que de revectoriser).
