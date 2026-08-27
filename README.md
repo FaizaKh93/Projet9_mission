@@ -89,7 +89,13 @@ Découpe le texte de chaque événement en chunks (`langchain_text_splitters`, l
 uv run python scripts/build_index.py
 ```
 
-⚠️ Étape 3, pas Étape 2 — construit l'index vectoriel FAISS, sauvegardé dans `data/index/` (`index.faiss` + `index.pkl`). Écrit avant qu'on sépare vectorisation et indexation : revectorise actuellement au lieu de réutiliser `data/vectors/events_vectors.json` via `FAISS.from_embeddings()` — à corriger à l'Étape 3.
+Étape 3 — construit l'index vectoriel FAISS à partir des vecteurs déjà calculés par `vectorize_events.py` (`FAISS.from_embeddings()`, aucun nouvel appel à Mistral), sauvegardé dans `data/index/` (`index.faiss` + `index.pkl`). Vérifie que le nombre de vecteurs indexés correspond au nombre de vecteurs chargés.
+
+```bash
+uv run jupyter notebook notebooks/04_search_evaluation.ipynb
+```
+
+Charge l'index et teste 5 questions représentatives (thème+lieu, filtre prix implicite, thème culturel différent, statut "Annulé", requête hors-sujet) pour vérifier la pertinence des résultats — la demande explicite du brief ("tests de recherche pour vérifier l'efficacité").
 
 ### Tests
 
@@ -103,4 +109,4 @@ Teste la logique de `preprocess_events.py` (exclusion France Travail, normalisat
 
 Étape 1 — configuration de l'environnement (terminée).
 Étape 2 — pré-processing des données Open Agenda (terminée : récupération, nettoyage, tests unitaires, découpage en chunks, vectorisation — 4241 événements en 7169 chunks vectorisés dans `data/vectors/events_vectors.json`).
-Étape 3 — base de données vectorielle FAISS (en cours : index déjà construit via `build_index.py`, à revoir pour réutiliser les vecteurs de `vectorize_events.py` via `FAISS.from_embeddings()` plutôt que de revectoriser).
+Étape 3 — base de données vectorielle FAISS (terminée : index construit via `FAISS.from_embeddings()` à partir des vecteurs déjà calculés, 7169/7169 vecteurs vérifiés, tests de recherche effectués dans `notebooks/04_search_evaluation.ipynb`).
