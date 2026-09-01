@@ -46,8 +46,12 @@ def load_vectors() -> list[dict]:
     return json.loads(VECTORS_PATH.read_text(encoding="utf-8"))
 
 
-def main() -> None:
-    """Point d'entrée : construire l'index FAISS à partir des vecteurs déjà calculés."""
+def main() -> int:
+    """Point d'entrée : construire l'index FAISS à partir des vecteurs déjà calculés.
+
+    Renvoie le nombre de vecteurs indexés — utilisé par api/main.py (endpoint /rebuild)
+    pour l'exposer dans le statut de reconstruction ; ignoré par l'appel en ligne de commande.
+    """
     load_dotenv()
     api_key = os.getenv("MISTRAL_API_KEY")
     if not api_key:
@@ -85,6 +89,7 @@ def main() -> None:
     vector_store.save_local(str(INDEX_PATH))
 
     print(f"Index FAISS sauvegardé dans {INDEX_PATH}")
+    return indexed_count
 
 
 if __name__ == "__main__":

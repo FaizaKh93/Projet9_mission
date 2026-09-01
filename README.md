@@ -7,9 +7,11 @@ POC d'un chatbot capable de répondre à des questions sur des événements cult
 ```
 notebooks/   notebooks d'exploration et de vérification (ex. 00_check_environment.ipynb)
 scripts/     scripts du pipeline de données (récupération, nettoyage, indexation)
+api/         API REST FastAPI exposant le système RAG (Étape 5)
+tests/       tests automatisés (pytest) : préprocessing et API
 ```
 
-Les autres dossiers (`api/`, `tests/`, `docs/`) seront ajoutés au fil des étapes suivantes, au moment où ils seront réellement utilisés.
+Le dossier `docs/` sera ajouté au fil des étapes suivantes, au moment où il sera réellement utilisé.
 
 ## Reproduction de l'environnement
 
@@ -33,6 +35,12 @@ Puis renseigner votre propre clé dans `.env` (jamais commité) :
 
 ```
 MISTRAL_API_KEY=votre_clé
+```
+
+Pour utiliser l'API (voir plus bas), renseigner aussi `X_API_KEY` dans ce même `.env` — une valeur de VOTRE choix (pas fournie par Mistral), servant de mot de passe pour déclencher `POST /rebuild`. Sans elle, `POST /rebuild` répond systématiquement `401 Unauthorized` (voir `verify_admin_key()` dans `api/main.py`) :
+
+```
+X_API_KEY=votre_secret_au_choix
 ```
 
 ### Vérifier l'installation
@@ -122,17 +130,48 @@ uv run jupyter notebook notebooks/05_rag_chain_evaluation.ipynb
 
 Teste 6 scénarios représentatifs sur la chaîne complète (thème+lieu, contrainte de prix, question multi-contraintes, événement annulé signalé comme tel dans la réponse, question hors-sujet, question temporelle ambiguë) — nécessite `MISTRAL_API_KEY` (génération payante).
 
+## API REST (Étape 5)
+
+```bash
+uv run uvicorn api.main:app --reload
+```
+
+Démarre l'API sur `http://127.0.0.1:8000`. Documentation Swagger interactive générée automatiquement sur `http://127.0.0.1:8000/docs`. La chaîne RAG est construite **une seule fois**, au démarrage du serveur (`lifespan`, voir `api/main.py`) — chaque appel à `/ask` réutilise cette même chaîne, sans recharger l'index FAISS ni recréer les clients Mistral à chaque requête.
+
+| Route | Méthode | Description |
+|---|---|---|
+| `/` | GET | Informations générales, pointeur vers `/docs`. |
+| `/health` | GET | Vérification de disponibilité du serveur, indépendante de l'état de la chaîne RAG. |
+| `/ask` | POST | Corps `{"question": "..."}` → réponse générée. `422` si la question est vide/absente, `503` si la chaîne n'a pas pu être construite au démarrage, `502` en cas d'échec du service Mistral. |
+| `/rebuild` | POST | **Nécessite l'en-tête HTTP `X-API-Key`**, avec la valeur de `X_API_KEY` définie dans `.env` — sans elle, `401 Unauthorized`. Relance le pipeline complet (`fetch_events` → `preprocess_events` → `vectorize_events` → `build_index`) en tâche de fond et recharge la chaîne RAG, sans redémarrer le serveur. Répond immédiatement `202 Accepted`, sans attendre la fin du pipeline (plusieurs minutes, appel payant à Mistral). `409 Conflict` si un rebuild est déjà en cours. |
+| `/rebuild` | GET | Consulte l'état de la dernière reconstruction (`idle`/`running`/`done`/`error`) — pas de clé requise, lecture seule. |
+
 ### Tests
 
 ```bash
 uv run pytest tests/ -v
 ```
 
-Teste la logique de `preprocess_events.py` (exclusion France Travail, normalisation de casse, extraction du statut, structuration des champs) sur des événements factices — ne nécessite pas d'avoir lancé `fetch_events.py` au préalable.
+`tests/test_preprocessing.py` teste la logique de `preprocess_events.py` (exclusion France Travail, normalisation de casse, extraction du statut, structuration des champs, extraction des occurrences) sur des événements factices — ne nécessite pas d'avoir lancé `fetch_events.py` au préalable.
+
+`tests/test_api.py` teste l'API (`api/main.py`) via `TestClient` : routing, validation Pydantic, codes d'erreur (422/401/409/502/503), protection de `/rebuild`. Les appels coûteux (Mistral, pipeline complet) sont mockés — `lifespan()` s'exécute réellement au démarrage de chaque test (chargement de l'index FAISS déjà sur disque), mais aucun appel réseau payant n'a lieu.
+
+`tests/test_query_filters.py` et `tests/test_rag_chain.py` testent la logique pure de `query_filters.py` (calcul de périodes, filtre FAISS, vérification des occurrences) et de `rag_chain.py` (formatage des dates, sélection de la prochaine occurrence, mise en forme du contexte) — aucune dépendance à Mistral ou FAISS, entièrement déterministes.
+
+Fonctions volontairement non testées unitairement (appels réseau réels — Mistral et/ou disque) : `fetch_events.py`, `vectorize_events.py`, `build_index.py`, `preprocess_events.py::load_raw_events`, `query_filters.py::extract_filters`, `rag_chain.py::retrieve_context`/`answer_question`. Validées autrement, via `notebooks/04_search_evaluation.ipynb`/`05_rag_chain_evaluation.ipynb` et l'exécution réelle du pipeline complet.
+
+Rapport de couverture (nécessite `pytest-cov`, dépendance de dev déjà installée) :
+
+```bash
+uv run pytest tests/ --cov=scripts --cov=api --cov-report=html
+```
+
+Génère `htmlcov/index.html` (gitignoré, régénérable). Couverture globale : 79% — répartie sans trou sur toute la logique testable unitairement (100% sur les fonctions pures citées ci-dessus), le reste correspondant aux appels réseau réels listés juste au-dessus.
 
 ## Statut
 
 Étape 1 — configuration de l'environnement (terminée).
 Étape 2 — pré-processing des données Open Agenda (terminée : récupération, nettoyage, tests unitaires, découpage en chunks, vectorisation — 4241 événements en 7169 chunks vectorisés dans `data/vectors/events_vectors.json`).
 Étape 3 — base de données vectorielle FAISS (terminée : index construit via `FAISS.from_embeddings()` à partir des vecteurs déjà calculés, 7169/7169 vecteurs vérifiés, tests de recherche effectués dans `notebooks/04_search_evaluation.ipynb`).
-Étape 4 — chaîne RAG (recherche + génération) : `scripts/rag_chain.py` + `scripts/query_filters.py` (recherche hybride filtre+sémantique, événements récurrents, affichage enrichi des métadonnées — voir plus haut). Scénarios de `notebooks/05_rag_chain_evaluation.ipynb` déjà revérifiés après les fixes de date et de métadonnées ; le fix des événements récurrents (`occurrences`) est le plus récent et n'a pas encore été testé — le pipeline (`preprocess_events.py` → `vectorize_events.py` → `build_index.py`) doit être relancé une dernière fois pour que `data/vectors/`/`data/index/` contiennent bien ce nouveau champ avant de le vérifier.
+Étape 4 — chaîne RAG (recherche + génération) : `scripts/rag_chain.py` + `scripts/query_filters.py` (recherche hybride filtre+sémantique, événements récurrents, affichage enrichi des métadonnées — voir plus haut). Terminée (mergée sur `main`).
+Étape 5 — API REST (terminée) : `api/main.py` (FastAPI, endpoints `/`, `/health`, `/ask`, `/rebuild` — voir plus haut). Tests : 14 fonctionnels (`tests/test_api.py`) + tests unitaires sur la logique pure (`tests/test_query_filters.py`, `tests/test_rag_chain.py`, complétés dans `tests/test_preprocessing.py`) — couverture 79%, sans trou hors appels réseau réels (voir section Tests). Jeu de test annoté + évaluation automatisée (Ragas) volontairement laissés pour une étape ultérieure, non demandés explicitement par l'Étape 5.

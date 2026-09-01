@@ -20,6 +20,7 @@ from preprocess_events import (  # noqa: E402
     is_relevant,
     normalize_city,
     parse_labeled_field,
+    parse_occurrences,
     parse_registration_link,
     structure_event,
 )
@@ -132,6 +133,58 @@ def test_parse_registration_link(raw_value, expected):
     assert parse_registration_link(raw_value) == expected
 
 
+# --- parse_occurrences : extraction des créneaux individuels (événements récurrents) ---
+
+
+@pytest.mark.parametrize(
+    "raw_timings, expected",
+    [
+        pytest.param(None, [], id="handles_missing_value"),
+        pytest.param("", [], id="handles_empty_string"),
+        pytest.param("pas du json", [], id="handles_malformed_json"),
+        pytest.param(
+            '[{"begin": "2026-04-21T16:00:00+02:00", "end": "2026-04-21T18:00:00+02:00"}]',
+            [{"start": "2026-04-21T16:00:00+02:00", "end": "2026-04-21T18:00:00+02:00"}],
+            id="extracts_single_occurrence_with_end",
+        ),
+        pytest.param(
+            '[{"begin": "2026-04-21T16:00:00+02:00"}]',
+            [{"start": "2026-04-21T16:00:00+02:00", "end": "2026-04-21T16:00:00+02:00"}],
+            id="falls_back_to_begin_when_end_missing",
+        ),
+        pytest.param(
+            '[{"begin": "2026-04-21T16:00:00+02:00"}, {"end": "2026-05-01T12:00:00+02:00"}]',
+            [{"start": "2026-04-21T16:00:00+02:00", "end": "2026-04-21T16:00:00+02:00"}],
+            id="skips_entries_without_begin",
+        ),
+        pytest.param(
+            '[{"begin": "2026-04-21T16:00:00+02:00"}, {"begin": "2026-06-03T16:00:00+02:00"}]',
+            [
+                {"start": "2026-04-21T16:00:00+02:00", "end": "2026-04-21T16:00:00+02:00"},
+                {"start": "2026-06-03T16:00:00+02:00", "end": "2026-06-03T16:00:00+02:00"},
+            ],
+            id="extracts_multiple_occurrences",
+        ),
+    ],
+)
+def test_parse_occurrences(raw_timings, expected):
+    """Extraire chaque créneau (begin/end -> start/end), avec repli sur begin si end est absent,
+    et ignorer les entrées sans begin — ou renvoyer une liste vide proprement (valeur absente,
+    vide, ou JSON invalide)."""
+    assert parse_occurrences(raw_timings) == expected
+
+
+def test_parse_occurrences_raises_on_json_object_instead_of_list():
+    """Limite connue et non corrigée à ce jour : un JSON syntaxiquement valide mais qui n'est
+    PAS une liste (un objet {} par exemple, au lieu d'un tableau []) fait planter la fonction
+    avec un AttributeError — seuls JSONDecodeError/TypeError sont attrapés autour de
+    json.loads(), pas ce cas. Jamais rencontré en pratique sur les données réelles (le champ
+    "timings" d'Open Agenda est toujours une liste), documenté ici pour ne pas le découvrir
+    par surprise en production si ce format venait à changer."""
+    with pytest.raises(AttributeError):
+        parse_occurrences('{"begin": "2026-01-01T00:00:00+00:00"}')
+
+
 # --- build_text : construction du texte à vectoriser ---
 
 
@@ -173,8 +226,18 @@ def test_build_text_skips_duplicate_longdescription():
 
 
 def test_build_text_handles_all_fields_empty():
-    """Renvoyer une chaîne vide, sans erreur, quand titre/description/longdescription sont tous vides."""
-    event = make_event(title_fr="", description_fr="", longdescription_fr="", conditions_fr="", keywords_fr=[])
+    """Renvoyer une chaîne vide, sans erreur, quand tous les champs contribuant au texte sont vides."""
+    event = make_event(
+        title_fr="",
+        description_fr="",
+        longdescription_fr="",
+        conditions_fr="",
+        keywords_fr=[],
+        # location_name par défaut ("Parc Longchamp" dans make_event()) contribue aussi au texte
+        # (voir build_text()) depuis l'ajout du bloc "Lieu : ..." — à vider explicitement ici,
+        # sinon le texte ne serait pas réellement vide malgré le nom de ce test.
+        location_name="",
+    )
     assert build_text(event) == ""
 
 
@@ -182,11 +245,11 @@ def test_build_text_handles_all_fields_empty():
 
 
 def test_structure_event_has_expected_keys():
-    """Produire exactement les 24 champs attendus, ni plus ni moins."""
+    """Produire exactement les 25 champs attendus, ni plus ni moins."""
     structured = structure_event(make_event())
     expected_keys = {
         "uid", "title", "text", "status", "attendance_mode",
-        "date_start", "date_end", "conditions", "age_min", "age_max",
+        "date_start", "date_end", "occurrences", "conditions", "age_min", "age_max",
         "accessibility_labels", "keywords", "location_name", "location_city",
         "location_address", "location_postalcode", "location_district",
         "location_insee", "location_phone", "location_website", "location_links",
@@ -224,6 +287,9 @@ def test_build_known_cities_keeps_only_cities_with_correct_postalcode():
             {
                 "title_fr": "", "description_fr": "", "longdescription_fr": "",
                 "conditions_fr": "", "keywords_fr": [],
+                # Sans ça, location_name par défaut ("Parc Longchamp") suffit à rendre le texte
+                # non vide (voir build_text()) et ce cas ne testerait plus ce qu'il prétend tester.
+                "location_name": "",
             },
             set(),
             False,
