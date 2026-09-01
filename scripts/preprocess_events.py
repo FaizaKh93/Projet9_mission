@@ -64,6 +64,30 @@ def parse_registration_link(raw_registration: str | None) -> str | None:
         return None
 
 
+def parse_occurrences(raw_timings: str | None) -> list[dict]:
+    """Extraire chaque occurrence individuelle d'un événement récurrent (champ timings, liste
+    JSON de créneaux [{"begin": ..., "end": ...}, ...]).
+
+    date_start/date_end (firstdate_begin/lastdate_end) ne donnent que la première et la
+    dernière occurrence — insuffisant pour un événement récurrent (ex. un atelier chaque
+    samedi d'avril à juin) dont il faut connaître la PROCHAINE occurrence, pas seulement la
+    première. Stocké séparément pour être exploité au moment de la question (rag_chain.py),
+    pas ici : "aujourd'hui" n'est pas connu au moment du preprocessing.
+    """
+    if not raw_timings:
+        return []
+    try:
+        timings = json.loads(raw_timings)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    occurrences = []
+    for timing in timings:
+        begin = timing.get("begin")
+        if begin:
+            occurrences.append({"start": begin, "end": timing.get("end") or begin})
+    return occurrences
+
+
 def normalize_city(city: str | None) -> str | None:
     """Corriger la casse tout-majuscule (ex. MARSEILLE -> Marseille), sans toucher aux noms déjà bien formatés."""
     # Valeur vide ou absente : retour tel quel, rien à normaliser.
@@ -83,6 +107,9 @@ def build_text(event: dict) -> str:
     status = parse_labeled_field(event.get("status"))
     conditions = (event.get("conditions_fr") or "").strip()
     keywords = event.get("keywords_fr") or []
+    accessibility_labels = event.get("accessibility_label_fr") or []
+    location_name = (event.get("location_name") or "").strip()
+    location_district = (event.get("location_district") or "").strip()
 
     parts = []
     # Mention du statut uniquement s'il sort du cas par défaut ("Programmé"), pour que le
@@ -105,6 +132,23 @@ def build_text(event: dict) -> str:
     if keywords:
         parts.append("Mots-clés : " + ", ".join(keywords))
 
+    # Accessibilité intégrée au texte plutôt qu'en filtre structuré : seulement 5 valeurs
+    # distinctes sur ~12,6% des événements (vérifié empiriquement), et ce sont des métadonnées
+    # en LISTE — le filtre FAISS ($in) ne sait vérifier qu'une valeur scalaire parmi une liste
+    # acceptée, pas l'inverse ("cette liste contient-elle X ?"). La recherche sémantique sur
+    # une formulation libre ("accessible en fauteuil roulant") est plus simple à ce stade.
+    if accessibility_labels:
+        parts.append("Accessibilité : " + ", ".join(accessibility_labels))
+
+    # Nom du lieu et arrondissement intégrés au texte (pas en filtre structuré, cf.
+    # location_city) : ce sont des noms propres qu'une question peut citer directement
+    # (ex. "à la médiathèque Louis Aragon", "dans le 8e arrondissement"), utiles à la
+    # recherche sémantique, contrairement aux champs purement factuels (adresse, téléphone...)
+    # qui n'apportent rien à la recherche et ne sont affichés qu'en métadonnée (format_docs).
+    if location_name or location_district:
+        lieu = " — ".join(part for part in [location_name, location_district] if part)
+        parts.append(f"Lieu : {lieu}")
+
     # Filtrage des parties vides avant assemblage.
     return "\n\n".join(part for part in parts if part)
 
@@ -126,6 +170,7 @@ def structure_event(event: dict) -> dict:
         "attendance_mode": parse_labeled_field(event.get("attendancemode")),
         "date_start": event.get("firstdate_begin"),
         "date_end": event.get("lastdate_end"),
+        "occurrences": parse_occurrences(event.get("timings")),
         "conditions": (event.get("conditions_fr") or "").strip() or None,
         "age_min": event.get("age_min"),
         "age_max": event.get("age_max"),
