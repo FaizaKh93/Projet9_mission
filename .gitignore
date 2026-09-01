@@ -13,3 +13,5 @@ data/index/
 
 # Tests
 .pytest_cache/
+.coverage
+htmlcov/
