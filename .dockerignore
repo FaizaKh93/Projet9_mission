@@ -1,0 +1,23 @@
+# Environnement local — reconstruit dans l'image par "uv sync", jamais copié tel quel.
+.venv/
+
+# Secrets — jamais dans l'image (voir Dockerfile : clés fournies à "docker run", pas au build).
+.env
+
+# Données — montées en volume au lancement (Approche 1), pas copiées dans l'image.
+data/
+
+# Pas utiles à l'API en conteneur : exploration, tests, index FAISS local hors volume.
+notebooks/
+tests/
+htmlcov/
+.pytest_cache/
+.coverage
+
+# Fichiers Python compilés, jamais à copier.
+__pycache__/
+*.pyc
+
+# Métadonnées du dépôt, inutiles dans l'image.
+.git/
+.gitignore

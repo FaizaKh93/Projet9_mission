@@ -18,12 +18,28 @@ n'est pas clairement exprimé — laisse un champ vide/None si la question ne le
 Question : {question}"""
 
 
+# Un jour de semaine cité seul (ex. "mercredi", "ce samedi") ne correspondait auparavant à
+# AUCUNE des catégories ci-dessous — extract_filters() retombait alors sur "aucune", et le LLM
+# de génération devait calculer lui-même la date de ce jour, de façon non fiable (constaté
+# empiriquement : juste une fois sur deux, sans garantie). D'où l'ajout des 7 jours nommément.
+JOURS_SEMAINE = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+
+
 class QueryFilters(BaseModel):
     """Critères de filtrage extraits d'une question en langage naturel."""
 
-    period: Literal["aujourd'hui", "ce_week_end", "cette_semaine", "semaine_prochaine", "aucune"] = Field(
+    period: Literal[
+        "aujourd'hui", "ce_week_end", "cette_semaine", "semaine_prochaine",
+        "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche",
+        "aucune",
+    ] = Field(
         default="aucune",
-        description="Période mentionnée dans la question. 'aucune' si aucune période précise n'est demandée.",
+        description=(
+            "Période mentionnée dans la question. Utilise le nom du jour précis ('lundi' à "
+            "'dimanche') si la question cite UN jour de la semaine en particulier (ex. "
+            "'mercredi', 'ce samedi'), plutôt que 'ce_week_end' ou 'cette_semaine' qui couvrent "
+            "plusieurs jours. 'aucune' si aucune période précise n'est demandée."
+        ),
     )
     location_city: str | None = Field(
         default=None,
@@ -84,6 +100,13 @@ def period_to_date_range(period: str, today: date) -> tuple[str, str] | None:
         next_monday = monday + timedelta(days=7)
         next_sunday = next_monday + timedelta(days=6)
         return next_monday.isoformat(), next_sunday.isoformat()
+    if period in JOURS_SEMAINE:
+        # Prochaine occurrence de ce jour, AUJOURD'HUI INCLUS si "today" tombe déjà sur ce
+        # jour-là ("ce mercredi" dit un mercredi désigne ce jour-même, pas dans 7 jours).
+        target_weekday = JOURS_SEMAINE.index(period)
+        days_ahead = (target_weekday - today.weekday()) % 7
+        target_date = today + timedelta(days=days_ahead)
+        return target_date.isoformat(), target_date.isoformat()
     return None
 
 

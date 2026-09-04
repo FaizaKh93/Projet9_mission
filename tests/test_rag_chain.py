@@ -14,7 +14,8 @@ from langchain_core.documents import Document
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from rag_chain import format_date_fr, format_docs, format_event_date_fr, next_occurrence_date  # noqa: E402
+from query_filters import QueryFilters  # noqa: E402
+from rag_chain import build_period_note, format_date_fr, format_docs, format_event_date_fr, next_occurrence_date  # noqa: E402
 
 # Dates de référence vérifiées par calcul dans la conversation du projet, pour des assertions
 # déterministes sans dépendre du jour réel d'exécution des tests.
@@ -116,6 +117,38 @@ def test_next_occurrence_date_ignores_entries_without_start():
         "occurrences": [{"end": "2026-09-06T12:00:00+02:00"}],  # pas de "start"
     }
     assert next_occurrence_date(meta, MONDAY) == "2026-09-05T10:00:00+00:00"
+
+
+# --- build_period_note : résolution de la période en date(s) précise(s), donnée au LLM ------
+
+
+def test_build_period_note_empty_when_no_period():
+    """"aucune" -> aucune date à résoudre, pas de note ajoutée (chaîne vide)."""
+    assert build_period_note(QueryFilters(period="aucune"), MONDAY) == ""
+
+
+def test_build_period_note_single_day_period():
+    """Période à un seul jour ("aujourd'hui" ou un jour de semaine précis) -> une seule date
+    nommée, pas une plage "du ... au ..."."""
+    note = build_period_note(QueryFilters(period="aujourd'hui"), MONDAY)
+    assert note == "Précision : la période demandée dans la question correspond exactement à lundi 31 août 2026.\n\n"
+
+
+def test_build_period_note_enumerates_every_day_of_a_range():
+    """Point central du fix : pour une plage de plusieurs jours ("ce week-end"), chaque jour est
+    listé nommément avec sa date ("aux dates suivantes : ..."), pas juste "du ... au ..." — pour
+    que le LLM n'ait pas à déduire lui-même quel jour de la plage correspond au nom cité dans
+    la question."""
+    note = build_period_note(QueryFilters(period="ce_week_end"), MONDAY)
+    assert "aux dates suivantes" in note
+    assert "samedi 5 septembre 2026" in note
+    assert "dimanche 6 septembre 2026" in note
+
+
+def test_build_period_note_resolves_weekday_mentioned_alone():
+    """Cas concret ayant motivé le fix : "mercredi" cité seul doit obtenir sa date précise."""
+    note = build_period_note(QueryFilters(period="mercredi"), MONDAY)
+    assert "mercredi 2 septembre 2026" in note
 
 
 # --- format_docs : mise en forme du contexte transmis au LLM --------------------------------
