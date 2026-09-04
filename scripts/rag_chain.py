@@ -13,7 +13,7 @@ la génération).
 """
 
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -24,7 +24,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_mistralai import ChatMistralAI, MistralAIEmbeddings
 
-from query_filters import build_faiss_filter, extract_filters, occurrence_in_period
+from query_filters import QueryFilters, build_faiss_filter, extract_filters, occurrence_in_period, period_to_date_range
 
 INDEX_PATH = Path(__file__).resolve().parent.parent / "data" / "index"
 
@@ -52,6 +52,14 @@ période précise ("ce week-end", "bientôt", "la semaine prochaine"), ne garde 
 événements dont la date tombe réellement dans cette période à partir d'aujourd'hui. \
 Si, après ce tri, aucun événement du contexte ne correspond réellement à la question, \
 dis-le clairement plutôt que de présenter des événements qui ne correspondent pas.
+
+Si la liste "Événements disponibles" ci-dessous est ENTIÈREMENT VIDE (aucun événement listé, \
+pas même un événement qui ne correspondrait pas), cela signifie qu'aucun événement de notre \
+base ne correspond à la question — dis-le clairement. Tu n'as accès à AUCUNE information en \
+dehors de cette liste : ne complète JAMAIS une réponse avec un événement, lieu, date ou \
+détail tiré de tes propres connaissances générales, même s'il te semble exact ou plausible, \
+même si tu es certain qu'il existe réellement — la liste ci-dessous est ta SEULE source \
+d'information, sans aucune exception.
 
 Réponds en français, de façon concise et bien formulée.
 
@@ -103,6 +111,42 @@ def next_occurrence_date(meta: dict, today: date) -> str | None:
     if upcoming:
         return min(upcoming)
     return meta.get("date_start")
+
+
+def build_period_note(filters: QueryFilters, today: date) -> str:
+    """Résoudre la période mentionnée dans la question ("ce samedi", "ce week-end"...) en
+    date(s) précise(s), calculée en Python (period_to_date_range(), déjà utilisée pour le
+    filtre de recherche) — à donner telle quelle au LLM de génération, jamais à lui faire
+    recalculer lui-même : constaté empiriquement peu fiable (deux réponses à la même question
+    "ce samedi" ont donné deux dates différentes, une correcte et une fausse).
+
+    QueryFilters.period ne connaît que 5 catégories, aucune ne cible un jour de semaine précis
+    ("samedi", "mercredi"...) — une question sur un jour précis retombe forcément sur une
+    catégorie plus large (ce_week_end, cette_semaine...), qui couvre PLUSIEURS jours. Se
+    contenter d'indiquer "du ... au ..." laisserait encore le LLM déduire lui-même quel jour de
+    la plage correspond au nom cité dans la question — cause probable des erreurs constatées
+    sur "samedi"/"mercredi" (noyés dans une plage), alors que "aujourd'hui" (seule catégorie à
+    un seul jour) restait fiable. Solution : énumérer CHAQUE jour de la plage nommément, pour
+    que "mercredi" (ou n'importe quel jour cité) ait toujours sa date associée en toutes lettres.
+    """
+    date_range = period_to_date_range(filters.period, today)
+    if not date_range:
+        return ""
+    start_date = date.fromisoformat(date_range[0])
+    end_date = date.fromisoformat(date_range[1])
+    if start_date == end_date:
+        note = f"Précision : la période demandée dans la question correspond exactement à {format_date_fr(start_date)}."
+    else:
+        days = []
+        current = start_date
+        while current <= end_date:
+            days.append(format_date_fr(current))
+            current += timedelta(days=1)
+        note = (
+            "Précision : la période demandée dans la question correspond exactement aux dates "
+            "suivantes : " + ", ".join(days) + "."
+        )
+    return note + "\n\n"
 
 
 def format_docs(docs: list[Document]) -> str:
@@ -176,6 +220,9 @@ def build_chain():
         de CHAQUE question — la recherche doit donc être appelée directement ici.
         """
         filters = extract_filters(question, api_key)
+        # Trace de diagnostic : utile pour confirmer que period trie bien les questions (déjà
+        # servi à diagnostiquer le cas "mercredi" -> "aucune" avant le fix des jours de semaine).
+        print(f"[retrieve_context] question={question!r} -> filters={filters!r}")
         today = date.today()
         faiss_filter = build_faiss_filter(filters, today)
         docs = vector_store.similarity_search(
@@ -186,10 +233,15 @@ def build_chain():
         # deux occurrences pourrait passer le filtre FAISS à tort (cf. query_filters.py). On
         # revérifie ici sur les occurrences individuelles avant de transmettre au LLM.
         docs = [doc for doc in docs if occurrence_in_period(doc.metadata, filters, today)]
-        return format_docs(docs)
+        return build_period_note(filters, today) + format_docs(docs)
 
     # Étape 3 : préparer le modèle de génération (différent du modèle d'embeddings ci-dessus).
-    llm = ChatMistralAI(mistral_api_key=api_key, model="mistral-large-latest")
+    # temperature=0 : réduit la variabilité d'une réponse à l'autre pour une même question
+    # (comme pour extract_filters()), mais n'élimine pas complètement la variation possible
+    # d'un appel à l'autre (calcul flottant non associatif, service réparti) — d'où
+    # build_period_note() ci-dessus, qui traite la cause réelle plutôt que d'espérer un
+    # comportement stable : le LLM n'a plus besoin de calculer la date lui-même.
+    llm = ChatMistralAI(mistral_api_key=api_key, model="mistral-large-latest", temperature=0)
 
     # Étape 4 : construire le gabarit de prompt, avec {context} et {question} comme espaces réservés.
     prompt = ChatPromptTemplate.from_messages([

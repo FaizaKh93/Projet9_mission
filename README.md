@@ -9,6 +9,7 @@ notebooks/   notebooks d'exploration et de vérification (ex. 00_check_environme
 scripts/     scripts du pipeline de données (récupération, nettoyage, indexation)
 api/         API REST FastAPI exposant le système RAG (Étape 5)
 tests/       tests automatisés (pytest) : préprocessing et API
+Dockerfile   conteneurise l'API (Étape 6) — voir section "Conteneurisation" plus bas
 ```
 
 Le dossier `docs/` sera ajouté au fil des étapes suivantes, au moment où il sera réellement utilisé.
@@ -122,6 +123,12 @@ Charge l'index et teste 5 questions représentatives (thème+lieu, filtre prix i
 
 `format_docs()` (rag_chain.py) met en forme le contexte transmis au LLM : titre, date (formatée en français avec jour de la semaine précalculé par `format_date_fr()` — jamais laissé au LLM, qui s'est trompé en le déduisant lui-même d'une date ISO brute), lieu, tarif, établissement, adresse, téléphone, site, réseaux sociaux, inscription, accès en ligne — chaque champ optionnel n'est ajouté que s'il est renseigné, pour éviter qu'un champ manquant (`None`) apparaisse littéralement dans le prompt et soit repris tel quel par le LLM.
 
+**Anti-hallucination sur un contexte vide** (trouvé en testant le déploiement Docker, Étape 6) : une question hors de la zone couverte (ex. "événements à Paris") produit un filtre qui ne retourne aucun document — contexte entièrement vide. Le `SYSTEM_PROMPT` d'origine ne couvrait que le cas "des événements sont listés, mais aucun ne correspond après tri par date" ; sur un contexte VRAIMENT vide, le LLM comblait le vide avec sa propre connaissance générale (des lieux parisiens réels mais absents de notre base). Corrigé en ajoutant une consigne explicite pour ce cas, formulée sans jamais nommer la zone géographique couverte (Bouches-du-Rhône) — la nommer risquerait au contraire d'inciter le LLM à halluciner des réponses *plausibles pour cette région précise*, plus difficiles à détecter qu'une hallucination sur Paris.
+
+**Jour de la semaine cité seul, sans autre période** (ex. "mercredi", "ce samedi") : ne correspondait à l'origine à aucune des 4 catégories de `QueryFilters.period` (`aujourd'hui`/`ce_week_end`/`cette_semaine`/`semaine_prochaine`) — `extract_filters()` retombait alors sur `"aucune"`, et le LLM de génération devait calculer lui-même la date de ce jour à partir d'une large liste d'événements futurs non filtrée, de façon non fiable (vérifié empiriquement : correct un appel sur deux). Corrigé par deux ajouts complémentaires :
+- `QueryFilters.period` reconnaît maintenant aussi les 7 jours de la semaine comme catégories à part entière ; `period_to_date_range()` calcule la prochaine occurrence exacte de ce jour (aujourd'hui inclus si "today" tombe déjà sur ce jour) — un seul jour, jamais une plage.
+- `build_period_note()` (rag_chain.py) transmet au LLM de génération la période déjà résolue en dates précises, plutôt que de le laisser recalculer "quel jour de la plage correspond à quel nom" — pour une plage de plusieurs jours (ex. "ce week-end"), chaque jour est énuméré nommément avec sa date exacte, pas juste "du ... au ...". `ChatMistralAI(..., temperature=0)` en complément (comme `extract_filters()`), pour réduire la variabilité résiduelle d'un appel à l'autre — sans garantir un déterminisme parfait (calcul flottant non associatif, service réparti), d'où l'importance du fix ci-dessus, qui traite la cause plutôt que d'espérer un comportement stable.
+
 **Limite connue, non traitée à ce stade** : la chaîne est *stateless* — `chain.invoke(question)` ne connaît que la question du tour actuel, aucun historique de conversation n'est conservé. Une question de suivi sans contexte explicite (ex. "je veux l'url de l'événement" après une première question) n'a structurellement aucun moyen d'être résolue correctement.
 
 ```bash
@@ -146,6 +153,30 @@ Démarre l'API sur `http://127.0.0.1:8000`. Documentation Swagger interactive g�
 | `/rebuild` | POST | **Nécessite l'en-tête HTTP `X-API-Key`**, avec la valeur de `X_API_KEY` définie dans `.env` — sans elle, `401 Unauthorized`. Relance le pipeline complet (`fetch_events` → `preprocess_events` → `vectorize_events` → `build_index`) en tâche de fond et recharge la chaîne RAG, sans redémarrer le serveur. Répond immédiatement `202 Accepted`, sans attendre la fin du pipeline (plusieurs minutes, appel payant à Mistral). `409 Conflict` si un rebuild est déjà en cours. |
 | `/rebuild` | GET | Consulte l'état de la dernière reconstruction (`idle`/`running`/`done`/`error`) — pas de clé requise, lecture seule. |
 
+## Conteneurisation (Étape 6)
+
+`Dockerfile` conteneurise uniquement l'**API** (`api/main.py`) — pas le pipeline de données. `scripts/fetch_events.py`/`preprocess_events.py`/`vectorize_events.py`/`build_index.py` continuent de tourner hors Docker, comme avant (en local, ou via `POST /rebuild` qui les exécute à l'intérieur du conteneur en cours d'exécution).
+
+**Choix délibéré (Approche 1, discutée et validée) : l'index FAISS (`data/index/`) n'est jamais intégré à l'image, il est monté en volume au lancement.** Alternative envisagée — l'intégrer à l'image au moment du `docker build` — écartée pour deux raisons : ça obligerait à faire circuler `MISTRAL_API_KEY` au moment de la construction de l'image (mauvaise pratique de sécurité, même avec les "build secrets" de BuildKit, qui protègent l'image finale mais pas la machine qui construit), et ça ne correspond pas à un besoin de rafraîchissement récurrent des données (chaque mise à jour obligerait à reconstruire toute l'image plutôt qu'un simple appel à `POST /rebuild`, déjà prévu pour ça).
+
+```bash
+docker build -t projet9-rag-api .
+```
+
+```bash
+docker run -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" projet9-rag-api
+```
+
+- `-p 8000:8000` — relie le port 8000 du conteneur à celui de la machine hôte (`http://localhost:8000/docs`, pas `http://0.0.0.0:8000` — cette dernière adresse n'existe que du point de vue du serveur à l'intérieur du conteneur, jamais joignable depuis l'extérieur).
+- `--env-file .env` — transmet `MISTRAL_API_KEY`/`X_API_KEY` au conteneur au lancement ; aucune clé n'est jamais copiée dans l'image (ni au build, ni dans une couche).
+- `-v "$(pwd)/data:/app/data"` — monte tout le dossier `data/` local (y compris l'index déjà construit) au chemin attendu par les scripts à l'intérieur du conteneur.
+
+**Sous Git Bash (MINGW64) sur Windows**, la conversion automatique de chemin de Git Bash peut casser la syntaxe `-v hôte:conteneur` de Docker — si le volume ne se monte pas correctement (erreur FAISS "could not open .../index.faiss", alors que le fichier existe bien côté hôte), préfixer la commande avec `MSYS_NO_PATHCONV=1` :
+
+```bash
+MSYS_NO_PATHCONV=1 docker run -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" projet9-rag-api
+```
+
 ### Tests
 
 ```bash
@@ -156,7 +187,7 @@ uv run pytest tests/ -v
 
 `tests/test_api.py` teste l'API (`api/main.py`) via `TestClient` : routing, validation Pydantic, codes d'erreur (422/401/409/502/503), protection de `/rebuild`. Les appels coûteux (Mistral, pipeline complet) sont mockés — `lifespan()` s'exécute réellement au démarrage de chaque test (chargement de l'index FAISS déjà sur disque), mais aucun appel réseau payant n'a lieu.
 
-`tests/test_query_filters.py` et `tests/test_rag_chain.py` testent la logique pure de `query_filters.py` (calcul de périodes, filtre FAISS, vérification des occurrences) et de `rag_chain.py` (formatage des dates, sélection de la prochaine occurrence, mise en forme du contexte) — aucune dépendance à Mistral ou FAISS, entièrement déterministes.
+`tests/test_query_filters.py` et `tests/test_rag_chain.py` testent la logique pure de `query_filters.py` (calcul de périodes — dont les 7 jours de la semaine cités seuls —, filtre FAISS, vérification des occurrences) et de `rag_chain.py` (formatage des dates, sélection de la prochaine occurrence, résolution de la période en note pour le LLM via `build_period_note()`, mise en forme du contexte) — aucune dépendance à Mistral ou FAISS, entièrement déterministes.
 
 Fonctions volontairement non testées unitairement (appels réseau réels — Mistral et/ou disque) : `fetch_events.py`, `vectorize_events.py`, `build_index.py`, `preprocess_events.py::load_raw_events`, `query_filters.py::extract_filters`, `rag_chain.py::retrieve_context`/`answer_question`. Validées autrement, via `notebooks/04_search_evaluation.ipynb`/`05_rag_chain_evaluation.ipynb` et l'exécution réelle du pipeline complet.
 
@@ -166,7 +197,7 @@ Rapport de couverture (nécessite `pytest-cov`, dépendance de dev déjà instal
 uv run pytest tests/ --cov=scripts --cov=api --cov-report=html
 ```
 
-Génère `htmlcov/index.html` (gitignoré, régénérable). Couverture globale : 79% — répartie sans trou sur toute la logique testable unitairement (100% sur les fonctions pures citées ci-dessus), le reste correspondant aux appels réseau réels listés juste au-dessus.
+Génère `htmlcov/index.html` (gitignoré, régénérable). Couverture globale : 80% (117 tests) — répartie sans trou sur toute la logique testable unitairement (100% sur les fonctions pures citées ci-dessus), le reste correspondant aux appels réseau réels listés juste au-dessus.
 
 ## Statut
 
@@ -174,4 +205,5 @@ Génère `htmlcov/index.html` (gitignoré, régénérable). Couverture globale :
 Étape 2 — pré-processing des données Open Agenda (terminée : récupération, nettoyage, tests unitaires, découpage en chunks, vectorisation — 4241 événements en 7169 chunks vectorisés dans `data/vectors/events_vectors.json`).
 Étape 3 — base de données vectorielle FAISS (terminée : index construit via `FAISS.from_embeddings()` à partir des vecteurs déjà calculés, 7169/7169 vecteurs vérifiés, tests de recherche effectués dans `notebooks/04_search_evaluation.ipynb`).
 Étape 4 — chaîne RAG (recherche + génération) : `scripts/rag_chain.py` + `scripts/query_filters.py` (recherche hybride filtre+sémantique, événements récurrents, affichage enrichi des métadonnées — voir plus haut). Terminée (mergée sur `main`).
-Étape 5 — API REST (terminée) : `api/main.py` (FastAPI, endpoints `/`, `/health`, `/ask`, `/rebuild` — voir plus haut). Tests : 14 fonctionnels (`tests/test_api.py`) + tests unitaires sur la logique pure (`tests/test_query_filters.py`, `tests/test_rag_chain.py`, complétés dans `tests/test_preprocessing.py`) — couverture 79%, sans trou hors appels réseau réels (voir section Tests). Jeu de test annoté + évaluation automatisée (Ragas) volontairement laissés pour une étape ultérieure, non demandés explicitement par l'Étape 5.
+Étape 5 — API REST (terminée) : `api/main.py` (FastAPI, endpoints `/`, `/health`, `/ask`, `/rebuild` — voir plus haut). Jeu de test annoté + évaluation automatisée (Ragas) volontairement laissés pour une étape ultérieure, non demandés explicitement par l'Étape 5.
+Étape 6 — conteneurisation (en cours) : `Dockerfile`/`.dockerignore` (voir section "Conteneurisation" plus haut), `/ask` et `/rebuild` vérifiés fonctionnels dans le conteneur (volume `data/` monté, clés transmises via `--env-file`). Deux bugs trouvés et corrigés en testant le déploiement : hallucination sur un contexte vide, calcul de date pour un jour de semaine cité seul (voir section "Chaîne RAG" plus haut). 117 tests, couverture 80%, sans trou hors appels réseau réels (voir section Tests). Restent : scénarios de démo, présentation PowerPoint.

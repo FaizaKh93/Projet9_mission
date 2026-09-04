@@ -17,6 +17,7 @@ from query_filters import QueryFilters, build_faiss_filter, occurrence_in_period
 # réelle du jour où les tests sont lancés.
 MONDAY = date(2026, 8, 31)
 SUNDAY_SAME_WEEK = date(2026, 9, 6)  # dimanche de la MÊME semaine que MONDAY, pas la suivante
+THURSDAY = date(2026, 9, 3)  # jeudi vérifié par calcul, pour tester le "bouclage" sur un jour déjà passé dans la semaine
 
 
 # --- period_to_date_range : conversion période nommée -> plage de dates ISO -----------------
@@ -61,6 +62,31 @@ def test_period_unknown_value_returns_none():
     assert period_to_date_range("valeur-inconnue", MONDAY) is None
 
 
+def test_period_weekday_today_is_that_day_returns_today():
+    """"lundi" demandé un lundi -> renvoie AUJOURD'HUI (le jour cité peut désigner le jour même,
+    pas nécessairement une occurrence future) — pas dans 7 jours."""
+    assert period_to_date_range("lundi", MONDAY) == ("2026-08-31", "2026-08-31")
+
+
+def test_period_weekday_later_this_week():
+    """"mercredi" demandé un lundi -> le mercredi de cette même semaine (2 jours plus tard)."""
+    assert period_to_date_range("mercredi", MONDAY) == ("2026-09-02", "2026-09-02")
+
+
+def test_period_weekday_wraps_to_next_week_when_already_passed():
+    """"lundi" demandé un jeudi -> le PROCHAIN lundi (4 jours plus tard), jamais un lundi déjà
+    passé cette semaine-là — le calcul doit "boucler en avant", pas renvoyer une date passée.
+    Cas central du bug corrigé : sans ce test, un jour "déjà passé" pourrait resurgir en négatif."""
+    assert period_to_date_range("lundi", THURSDAY) == ("2026-09-07", "2026-09-07")
+
+
+def test_period_weekday_returns_single_day_range():
+    """Un jour de semaine précis renvoie toujours une plage d'UN SEUL jour (borne basse ==
+    borne haute), contrairement à "cette_semaine"/"ce_week_end" (plusieurs jours)."""
+    start, end = period_to_date_range("vendredi", MONDAY)
+    assert start == end
+
+
 # --- build_faiss_filter : filtres extraits -> dictionnaire de filtre FAISS -------------------
 
 
@@ -79,6 +105,17 @@ def test_build_faiss_filter_with_period_uses_overlap_not_date_start_alone():
     assert result == {
         "date_end": {"$gte": "2026-09-05"},
         "date_start": {"$lte": "2026-09-06T23:59:59"},
+    }
+
+
+def test_build_faiss_filter_with_weekday_period():
+    """Un jour de semaine précis fonctionne avec build_faiss_filter() exactement comme les
+    autres périodes — réutilisation générique de period_to_date_range(), pas de cas spécial
+    ajouté dans build_faiss_filter() elle-même."""
+    result = build_faiss_filter(QueryFilters(period="mercredi"), MONDAY)
+    assert result == {
+        "date_end": {"$gte": "2026-09-02"},
+        "date_start": {"$lte": "2026-09-02T23:59:59"},
     }
 
 

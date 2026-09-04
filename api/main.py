@@ -107,7 +107,11 @@ async def lifespan(app: FastAPI):
         # app.state : emplacement fourni par FastAPI/Starlette pour stocker un objet partagé
         # entre toutes les requêtes, initialisé une fois ici plutôt que dans chaque route.
         app.state.chain = build_chain()
-    except Exception:
+    except Exception as exc:
+        # Sans ce print, l'échec est totalement invisible (ni logs, ni erreur) — impossible à
+        # diagnostiquer depuis "docker logs" ou le terminal. Même raisonnement que pour
+        # run_rebuild_pipeline() : visible côté serveur, jamais renvoyé au client (503 générique).
+        print(f"[lifespan] échec de build_chain() au démarrage : {exc}")
         app.state.chain = None
     app.state.rebuild_status = RebuildStatus(state="idle")
     # Tout ce qui est avant "yield" s'exécute au démarrage du serveur, une seule fois.
@@ -158,8 +162,11 @@ def ask(request: AskRequest) -> AskResponse:
     except Exception as exc:
         # Erreur venant d'un service tiers (Mistral) en amont de notre API : 502 ("Bad
         # Gateway") plutôt qu'un 500 générique, avec un message propre au lieu d'exposer la
-        # trace Python brute à l'appelant. "from exc" garde la cause d'origine dans les logs
-        # serveur (visible côté FastAPI), sans la renvoyer dans la réponse HTTP.
+        # trace Python brute à l'appelant. Le print() est nécessaire pour la garder visible
+        # côté serveur : une HTTPException gérée (contrairement à une exception non attrapée)
+        # n'est PAS journalisée automatiquement par uvicorn — sans cette ligne, la cause réelle
+        # ne serait visible nulle part, ni dans la réponse HTTP (volontairement), ni dans les logs.
+        print(f"[ask] échec de chain.invoke() : {exc}")
         raise HTTPException(
             status_code=502,
             detail="Échec de la génération de réponse (service Mistral indisponible ou en erreur).",
