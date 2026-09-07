@@ -4,12 +4,17 @@ construction du filtre FAISS, vérification des occurrences — toute la logique
 hors périmètre d'un test unitaire gratuit.
 """
 
+import json
 import sys
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import query_filters  # noqa: E402 — import du module (pas seulement des noms) pour pouvoir
+# monkeypatcher query_filters.PROCESSED_PATH dans fake_processed_events() ci-dessous.
 from query_filters import (  # noqa: E402
     QueryFilters,
     build_faiss_filter,
@@ -149,19 +154,40 @@ def test_build_faiss_filter_with_weekday_period():
     }
 
 
-def test_build_faiss_filter_adds_location_city_condition():
+@pytest.fixture
+def fake_processed_events(tmp_path, monkeypatch):
+    """Rediriger query_filters.PROCESSED_PATH vers un petit fichier JSON factice, pour que
+    normalize_location_city() (et tout ce qui en dépend) ne lise jamais le vrai
+    data/processed/events.json — absent dans un clone fraîchement récupéré (gitignored) ou en
+    CI, ce qui ferait planter ces tests sur un FileNotFoundError plutôt que de les rendre
+    déterministes. cache_clear() avant ET après : _known_cities() est mis en cache
+    (lru_cache) — sans ce nettoyage, un test lirait le résultat mis en cache par le test
+    précédent (le vrai fichier ou un autre fichier factice) au lieu du sien.
+    """
+    fake_events = [{"location_city": "Marseille"}, {"location_city": "Aix-en-Provence"}]
+    fake_path = tmp_path / "events.json"
+    fake_path.write_text(json.dumps(fake_events), encoding="utf-8")
+    monkeypatch.setattr(query_filters, "PROCESSED_PATH", fake_path)
+    query_filters._known_cities.cache_clear()
+    yield
+    query_filters._known_cities.cache_clear()
+
+
+def test_build_faiss_filter_adds_location_city_condition(fake_processed_events):
     """Ville renseignée -> condition d'égalité exacte ajoutée au filtre."""
     result = build_faiss_filter(QueryFilters(location_city="Marseille"), MONDAY)
     assert result["location_city"] == {"$eq": "Marseille"}
 
 
 def test_build_faiss_filter_omits_location_city_when_absent():
-    """Ville non renseignée -> pas de clé "location_city" du tout (pas de contrainte forcée à None)."""
+    """Ville non renseignée -> pas de clé "location_city" du tout (pas de contrainte forcée à
+    None). Pas besoin de fake_processed_events : normalize_location_city() n'est jamais appelée
+    quand filters.location_city est vide (voir build_faiss_filter)."""
     result = build_faiss_filter(QueryFilters(), MONDAY)
     assert "location_city" not in result
 
 
-def test_normalize_location_city_fixes_case_mismatch():
+def test_normalize_location_city_fixes_case_mismatch(fake_processed_events):
     """Non-régression : "Aix-En-Provence" (casse reprise de la question par le LLM) doit être
     recalé sur "Aix-en-Provence" (casse réelle en base) — sinon $eq échoue à tort et le contexte
     ressort vide alors que de vrais événements existent (constaté empiriquement,
@@ -169,24 +195,26 @@ def test_normalize_location_city_fixes_case_mismatch():
     assert normalize_location_city("Aix-En-Provence") == "Aix-en-Provence"
 
 
-def test_normalize_location_city_is_case_insensitive_both_ways():
+def test_normalize_location_city_is_case_insensitive_both_ways(fake_processed_events):
     """Fonctionne quelle que soit la casse fournie, pas seulement tout-minuscule ou le cas
     précis rencontré."""
     assert normalize_location_city("MARSEILLE") == "Marseille"
     assert normalize_location_city("marseille") == "Marseille"
 
 
-def test_normalize_location_city_passes_through_unknown_city():
+def test_normalize_location_city_passes_through_unknown_city(fake_processed_events):
     """Ville hors zone couverte (ex. "Paris") -> renvoyée telle quelle, pas d'erreur. Le filtre
     FAISS ne retournera simplement aucun résultat — comportement correct, pas un cas à corriger."""
     assert normalize_location_city("Paris") == "Paris"
 
 
 def test_normalize_location_city_handles_none():
+    """Pas besoin de fake_processed_events : city=None fait un retour anticipé dans
+    normalize_location_city(), avant même d'appeler _known_cities()."""
     assert normalize_location_city(None) is None
 
 
-def test_build_faiss_filter_normalizes_location_city_case():
+def test_build_faiss_filter_normalizes_location_city_case(fake_processed_events):
     """Non-régression bout en bout : build_faiss_filter() applique bien normalize_location_city()
     avant de construire la condition $eq."""
     result = build_faiss_filter(QueryFilters(location_city="Aix-En-Provence"), MONDAY)
@@ -250,7 +278,7 @@ def test_build_faiss_filter_omits_attendance_mode_when_absent():
     assert "attendance_mode" not in result
 
 
-def test_build_faiss_filter_combines_all_criteria_together():
+def test_build_faiss_filter_combines_all_criteria_together(fake_processed_events):
     """Tous les critères renseignés en même temps -> date/ville/mode dans le bloc de base ($and[0]),
     plus les 2 blocs $or age_min/age_max ($and[1] et [2]) — imbrication décrite dans
     build_faiss_filter() dès qu'un target_age est présent."""
