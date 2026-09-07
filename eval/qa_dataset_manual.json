@@ -1,0 +1,134 @@
+[
+  {
+    "question": "Y a-t-il des activités culturelles disponibles en ligne ?",
+    "reference_answer": "Exemple réel vérifié : \"Activité à télécharger 'Archi'zine', un fanzine pour apprendre à dessiner le paysage et l'architecture\" (mode de participation \"En ligne\", actif au 10 octobre 2026). Le chatbot doit proposer un événement réellement en ligne, pas un événement présentiel.",
+    "source": "manual",
+    "dimension": "mode_participation",
+    "time_sensitive": true,
+    "verified_on": "2026-09-04",
+    "source_event_uids": ["43956835"]
+  },
+  {
+    "question": "Quelles expositions historiques puis-je découvrir au Château de Tarascon, et comment réserver une visite ?",
+    "reference_answer": "Exemple réel vérifié : deux expositions sont à découvrir au Château de Tarascon — \"Le bon roi René, chevalier des arts\" et \"La mode au Moyen Âge, élégance et prestige à la cour du Roi René\" (costumes historiques reconstitués), gratuites sans réservation (19-20 septembre 2026). Pour une visite guidée (\"Visites flash\", 30 min), réservation conseillée au 04 90 91 01 93, jauge limitée. Le chatbot doit citer des expositions réellement actives à cette date, avec le bon moyen de réservation pour la visite guidée.",
+    "source": "manual",
+    "dimension": "lieu_precis_reservation",
+    "time_sensitive": true,
+    "verified_on": "2026-09-07",
+    "source_event_uids": ["75342026", "71445473"]
+  },
+  {
+    "question": "Qu'est-ce qu'on fait comme activité à l'atelier de jardinage à Marsaille ?",
+    "reference_answer": "Exemple réel vérifié : l'\"Atelier jardinage : Boutures et bouquins\" (Bibliothèque Saint-André, 16e Arrondissement de Marseille, prochaine séance le 9 septembre 2026) propose une découverte et initiation au jardinage : semis, boutures, échange et partage de graines, plantes et livres. Ouvert à tout public à partir de 5 ans. Le chatbot doit citer la bonne prochaine occurrence (9 septembre 2026), pas une séance déjà passée de cet atelier récurrent.",
+    "source": "manual",
+    "dimension": "evenement_recurrent",
+    "time_sensitive": true,
+    "verified_on": "2026-09-07",
+    "source_event_uids": ["46934898"]
+  },
+  {
+    "question": "Qu'est-ce qu'il y a à faire à Marseille ce mois-ci ?",
+    "reference_answer": "Vérifié le 07/09/2026 : parmi les événements actifs à Marseille en septembre 2026 figurent l'\"Atelier jardinage : Boutures et bouquins\" (9 septembre, Bibliothèque Saint-André) et l'exposition \"AFRICA\" de Louisa Babari, en cours tout le mois au [mac] musée d'art contemporain. Le chatbot doit proposer des événements réellement actifs en septembre 2026, sans déborder sur d'autres mois sans le préciser.",
+    "source": "manual",
+    "dimension": "periode_ce_mois",
+    "time_sensitive": true,
+    "verified_on": "2026-09-07",
+    "source_event_uids": ["46934898", "62982650"]
+  },
+  {
+    "question": "Qu'est-ce qu'il y a à faire à Marseille dimanche prochain ?",
+    "reference_answer": "Vérifié le 07/09/2026 (lundi) : \"dimanche prochain\" résout au 13 septembre 2026 (jour de semaine confirmé par calcul). Deux expositions sont ouvertes ce jour-là à Marseille : \"AFRICA\" de Louisa Babari (MAC - Musée d'art contemporain) et le \"Nouveau parcours des collections modernes et contemporaines\" (Musée Cantini) — leurs occurrences détaillées confirment une ouverture le 13 septembre (ces deux musées ferment le lundi, pas le dimanche). Le chatbot doit citer des événements réellement ouverts ce jour précis, pas un autre dimanche.",
+    "source": "manual",
+    "dimension": "jour_semaine_precis",
+    "time_sensitive": true,
+    "verified_on": "2026-09-07",
+    "source_event_uids": ["62982650", "63781217"]
+  },
+  {
+    "question": "Que me conseillez-vous de faire à Marseille ?",
+    "reference_answer": "Question ouverte, sans contrainte précise : plusieurs réponses sont valables, il n'y a pas de réponse unique attendue. Le chatbot doit proposer un ou plusieurs événements réellement actifs à Marseille d'après les données — par exemple l'\"Atelier jardinage : Boutures et bouquins\" (9 septembre 2026, Bibliothèque Saint-André) est un exemple de réponse valable — sans inventer d'événement absent des données.",
+    "source": "manual",
+    "dimension": "question_ouverte",
+    "time_sensitive": true,
+    "verified_on": "2026-09-07",
+    "source_event_uids": ["46934898"],
+    "caveat": "Question ouverte sans réponse unique : un score de context_recall/answer_correctness bas ne signifie pas forcément une mauvaise réponse si le chatbot cite un autre événement tout aussi valable que celui pris en exemple ici."
+  },
+  {
+    "question": "Je cherche une activité gratuite pour sortir avec mon enfant de 8 ans",
+    "reference_answer": "Exemple réel vérifié : \"Joue sur PC\" (Martigues, gratuit, 7-18 ans, tous les mercredis 14h-16h et 16h30-18h30 jusqu'au 30 septembre 2026) — atelier de découverte de jeux vidéo (Minecraft, Fortnite, Sonic...). Le chatbot doit proposer un événement réellement gratuit ET dont la tranche d'âge couvre 8 ans (age_min <= 8 <= age_max), pas une approximation sur l'un des deux critères.",
+    "source": "manual",
+    "dimension": "contrainte_prix_et_age",
+    "time_sensitive": true,
+    "verified_on": "2026-09-07",
+    "source_event_uids": ["16402152"]
+  },
+  {
+    "question": "Y a-t-il des événements accessibles en fauteuil roulant ?",
+    "reference_answer": "Les données ne comportent pas de champ spécifique \"accessible en fauteuil roulant\" — seulement des labels d'accessibilité génériques (\"handicap moteur\", \"handicap visuel\", \"handicap auditif\", \"handicap intellectuel\", \"handicap psychique\"). Exemple réel vérifié : l'événement \"Le fabuleux destin de la girafe Zarafa en Provence, menez l'enquête avec un archiviste\" (Archives départementales des Bouches-du-Rhône, Marseille 3e, 19-20 septembre 2026) est marqué \"handicap moteur\". Le chatbot doit restituer ce label tel quel, sans affirmer une accessibilité en fauteuil roulant plus précise que ce que les données permettent de confirmer.",
+    "source": "manual",
+    "dimension": "accessibilite",
+    "time_sensitive": true,
+    "verified_on": "2026-09-07",
+    "source_event_uids": ["41965726"]
+  },
+  {
+    "question": "Quels événements y a-t-il à Salon-de-Provence ?",
+    "reference_answer": "Exemples réels vérifiés à Salon-de-Provence : les visites guidées \"Au-delà des pierres\" (église Saint-Michel, 19 septembre 2026) et un \"Double concert\" (église Saint-Michel, entrée libre dans la limite de 200 places, 20 septembre 2026). Le chatbot doit citer des événements réellement situés à Salon-de-Provence, pas une autre ville des Bouches-du-Rhône.",
+    "source": "manual",
+    "dimension": "ville_precise",
+    "time_sensitive": true,
+    "verified_on": "2026-09-07",
+    "source_event_uids": ["11963738", "47569420"]
+  },
+  {
+    "question": "Je veux une activité en présentiel à Aix-En-Provence, pas en ligne",
+    "reference_answer": "Exemple réel vérifié : \"Visite guidée du 6mic\" (Aix-en-Provence, gratuit sur réservation à billetterie@6mic-aix.fr, 19 septembre 2026, mode de participation \"Sur place\"). Le chatbot doit proposer un événement réellement en présentiel (\"Sur place\"), pas un événement \"En ligne\" ou \"Mixte\".",
+    "source": "manual",
+    "dimension": "ville_et_mode_participation",
+    "time_sensitive": true,
+    "verified_on": "2026-09-07",
+    "source_event_uids": ["41099953"]
+  },
+  {
+    "question": "Y a-t-il des événements accessibles à la fois en ligne et sur place ?",
+    "reference_answer": "Exemple réel vérifié : l'exposition \"Nador - Fragments en tension\" (Marseille, du 10 septembre au 30 octobre 2026, mode de participation \"Mixte\"). Le chatbot doit distinguer ce mode \"Mixte\" des deux autres (\"Sur place\", \"En ligne\") et ne le proposer que si la question porte vraiment sur les deux modes à la fois.",
+    "source": "manual",
+    "dimension": "mode_participation_mixte",
+    "time_sensitive": true,
+    "verified_on": "2026-09-07",
+    "source_event_uids": ["6089096"]
+  },
+  {
+    "question": "Comment réserver un atelier à la bibliothèque de Marseille ?",
+    "reference_answer": "Exemple réel vérifié : l'\"Atelier reliure\" (Bibliothèque Saint-André, Marseille, 26 septembre 2026, initiation à la reliure japonaise, à partir de 15 ans) s'inscrit par téléphone au 04 13 94 82 00. Le chatbot doit proposer un événement réellement de type atelier (pas un spectacle ou une autre activité), avec un vrai moyen de réservation tiré des données.",
+    "source": "manual",
+    "dimension": "reservation_contact",
+    "time_sensitive": true,
+    "verified_on": "2026-09-07",
+    "source_event_uids": ["85516150"]
+  },
+  {
+    "question": "Quels événements sont annulés en ce moment ?",
+    "reference_answer": "Vérifié le 07/09/2026 : aucun événement au statut \"Annulé\" encore d'actualité (date non expirée) n'existe actuellement dans la base, hormis un enregistrement de test sans contenu réel (titre littéral \"test\", écarté). Le chatbot doit répondre honnêtement qu'aucun événement annulé ne correspond, sans en inventer un ni présenter à tort un événement au statut normal (\"Programmé\") comme annulé.",
+    "source": "manual",
+    "dimension": "statut_annule",
+    "time_sensitive": true,
+    "verified_on": "2026-09-07",
+    "source_event_uids": []
+  },
+  {
+    "question": "Quels événements y a-t-il à Paris ?",
+    "reference_answer": "Aucun événement à Paris n'existe dans la base (limitée aux Bouches-du-Rhône). Le chatbot doit le dire honnêtement, sans halluciner d'événement parisien plausible mais absent des données — c'est le bug corrigé à l'Étape 6, ce cas sert de test de non-régression.",
+    "source": "manual",
+    "dimension": "hors_zone_geographique",
+    "source_event_uids": []
+  },
+  {
+    "question": "Quelle est la recette d'un bon gâteau au chocolat ?",
+    "reference_answer": "Le chatbot ne peut pas répondre à cette question : elle ne concerne pas les événements culturels de la base Puls-Events. Il doit le dire clairement, sans inventer de recette ni forcer un rapprochement avec un événement culinaire non pertinent.",
+    "source": "manual",
+    "dimension": "hors_sujet",
+    "source_event_uids": []
+  }
+]

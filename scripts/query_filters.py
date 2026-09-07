@@ -5,11 +5,16 @@ calcul des dates (fait en Python, déterministe) : un LLM s'est montré peu fiab
 calculer une vraie plage de dates 
 """
 
+import json
 from datetime import date, datetime, timedelta
+from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from langchain_mistralai import ChatMistralAI
 from pydantic import BaseModel, Field
+
+PROCESSED_PATH = Path(__file__).resolve().parent.parent / "data" / "processed" / "events.json"
 
 EXTRACTION_PROMPT = """Analyse cette question posée à un chatbot d'événements culturels \
 et identifie les critères de filtrage qu'elle contient explicitement. Ne déduis rien qui \
@@ -29,7 +34,7 @@ class QueryFilters(BaseModel):
     """Critères de filtrage extraits d'une question en langage naturel."""
 
     period: Literal[
-        "aujourd'hui", "ce_week_end", "cette_semaine", "semaine_prochaine",
+        "aujourd'hui", "ce_week_end", "cette_semaine", "semaine_prochaine", "ce_mois",
         "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche",
         "aucune",
     ] = Field(
@@ -38,7 +43,8 @@ class QueryFilters(BaseModel):
             "Période mentionnée dans la question. Utilise le nom du jour précis ('lundi' à "
             "'dimanche') si la question cite UN jour de la semaine en particulier (ex. "
             "'mercredi', 'ce samedi'), plutôt que 'ce_week_end' ou 'cette_semaine' qui couvrent "
-            "plusieurs jours. 'aucune' si aucune période précise n'est demandée."
+            "plusieurs jours. 'ce_mois' pour 'ce mois-ci'/'ce mois'. 'aucune' si aucune période "
+            "précise n'est demandée."
         ),
     )
     location_city: str | None = Field(
@@ -65,6 +71,37 @@ class QueryFilters(BaseModel):
     )
 
 
+@lru_cache(maxsize=1)
+def _known_cities() -> dict[str, str]:
+    """Associer chaque ville en minuscules à sa casse canonique dans les données (ex.
+    "aix-en-provence" -> "Aix-en-Provence"), pour normalize_location_city() ci-dessous. Chargé
+    une seule fois (lru_cache) : la liste des villes ne change qu'après un nouveau
+    preprocess_events.py, jamais entre deux questions.
+    """
+    events = json.loads(PROCESSED_PATH.read_text(encoding="utf-8"))
+    return {city.lower(): city for e in events if (city := e.get("location_city"))}
+
+
+def normalize_location_city(city: str | None) -> str | None:
+    """Recaler la ville extraite par extract_filters() sur sa casse exacte dans les données.
+
+    extract_filters() reprend souvent la casse telle qu'écrite dans la question (ex. l'utilisateur
+    tape "Aix-En-Provence", le LLM extrait "Aix-En-Provence") — jamais passée par
+    preprocess_events.py::normalize_city(), qui ne s'exécute qu'une fois côté données, pas ici.
+    build_faiss_filter() compare ensuite avec $eq (chaînes strictement égales) : "Aix-En-Provence"
+    != "Aix-en-Provence" (e minuscule en base) fait échouer le filtre à tort, alors que de vrais
+    événements existent — constaté empiriquement (eval/diagnose_hallucination.py, contexte vide
+    à tort pour une question sur Aix-en-Provence). Pas de simple .title() ici : Python capitalise
+    après chaque tiret, "aix-en-provence".title() redonne "Aix-En-Provence" — exactement le bug.
+
+    Ville non reconnue (hors zone couverte, ex. "Paris") : renvoyée telle quelle, le filtre FAISS
+    ne retournera simplement aucun résultat — comportement correct, pas une erreur à corriger ici.
+    """
+    if not city:
+        return city
+    return _known_cities().get(city.lower(), city)
+
+
 def extract_filters(question: str, api_key: str) -> QueryFilters:
     """Demander au LLM d'identifier les critères de filtrage présents dans la question.
 
@@ -81,9 +118,15 @@ def extract_filters(question: str, api_key: str) -> QueryFilters:
 def period_to_date_range(period: str, today: date) -> tuple[str, str] | None:
     """Convertir une période nommée en plage de dates ISO, par calcul déterministe (pas par le LLM).
 
-    "Cette semaine"/"ce week-end" désignent toujours la semaine EN COURS (celle qui contient
-    aujourd'hui), pas la suivante — qu'on soit lundi ou dimanche, "ce week-end" renvoie le
-    même samedi/dimanche.
+    "Cette semaine"/"ce week-end"/"ce mois" désignent toujours la période EN COURS (celle qui
+    contient aujourd'hui), pas la suivante — qu'on soit lundi ou dimanche, "ce week-end" renvoie
+    le même samedi/dimanche.
+
+    Borne basse toujours >= today, jamais le début "théorique" de la période (ex. le lundi de la
+    semaine courante) : un événement déjà terminé avant aujourd'hui n'est jamais une réponse
+    valable, même s'il tombe dans la période nommée (ex. "cette semaine" un jeudi ne doit pas
+    faire remonter un événement terminé lundi). Même principe que le filtre par défaut de
+    build_faiss_filter() quand aucune période n'est précisée.
     """
     monday = today - timedelta(days=today.weekday())
 
@@ -95,11 +138,18 @@ def period_to_date_range(period: str, today: date) -> tuple[str, str] | None:
         return saturday.isoformat(), sunday.isoformat()
     if period == "cette_semaine":
         sunday = monday + timedelta(days=6)
-        return monday.isoformat(), sunday.isoformat()
+        return today.isoformat(), sunday.isoformat()
     if period == "semaine_prochaine":
         next_monday = monday + timedelta(days=7)
         next_sunday = next_monday + timedelta(days=6)
         return next_monday.isoformat(), next_sunday.isoformat()
+    if period == "ce_mois":
+        if today.month == 12:
+            first_of_next_month = date(today.year + 1, 1, 1)
+        else:
+            first_of_next_month = date(today.year, today.month + 1, 1)
+        last_day_of_month = first_of_next_month - timedelta(days=1)
+        return today.isoformat(), last_day_of_month.isoformat()
     if period in JOURS_SEMAINE:
         # Prochaine occurrence de ce jour, AUJOURD'HUI INCLUS si "today" tombe déjà sur ce
         # jour-là ("ce mercredi" dit un mercredi désigne ce jour-même, pas dans 7 jours).
@@ -146,16 +196,29 @@ def build_faiss_filter(filters: QueryFilters, today: date) -> dict:
         conditions["date_end"] = {"$gte": today.isoformat()}
 
     if filters.location_city:
-        conditions["location_city"] = {"$eq": filters.location_city}
-
-    if filters.target_age is not None:
-        conditions["age_min"] = {"$lte": filters.target_age}
-        conditions["age_max"] = {"$gte": filters.target_age}
+        conditions["location_city"] = {"$eq": normalize_location_city(filters.location_city)}
 
     if filters.attendance_mode:
         conditions["attendance_mode"] = {"$eq": filters.attendance_mode}
 
-    return conditions
+    if filters.target_age is None:
+        return conditions
+
+    # age_min/age_max valent None pour la grande majorité des événements (4334/4502 mesurés sur
+    # data/processed/events.json), pas 0/110 comme le documente à tort preprocess_events.py —
+    # None doit se lire comme "tout public", pas comme absence de valeur à comparer : un simple
+    # {"age_min": {"$lte": age}} plante avec un TypeError côté FAISS (comparaison None <= int,
+    # langchain_community/vectorstores/faiss.py::filter_fn, aucun garde-fou intégré), constaté
+    # empiriquement sur une vraie question posant un âge précis. D'où le $or explicite ci-dessous :
+    # un événement passe le filtre s'il n'a pas de restriction d'âge, OU si l'âge demandé y entre.
+    age = filters.target_age
+    return {
+        "$and": [
+            conditions,
+            {"$or": [{"age_min": {"$eq": None}}, {"age_min": {"$lte": age}}]},
+            {"$or": [{"age_max": {"$eq": None}}, {"age_max": {"$gte": age}}]},
+        ]
+    }
 
 
 def occurrence_in_period(meta: dict, filters: QueryFilters, today: date) -> bool:

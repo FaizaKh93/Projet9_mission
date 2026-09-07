@@ -15,7 +15,14 @@ from langchain_core.documents import Document
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from query_filters import QueryFilters  # noqa: E402
-from rag_chain import build_period_note, format_date_fr, format_docs, format_event_date_fr, next_occurrence_date  # noqa: E402
+from rag_chain import (  # noqa: E402
+    NO_RESULTS_MESSAGE,
+    build_period_note,
+    format_date_fr,
+    format_docs,
+    format_event_date_fr,
+    next_occurrence_date,
+)
 
 # Dates de référence vérifiées par calcul dans la conversation du projet, pour des assertions
 # déterministes sans dépendre du jour réel d'exécution des tests.
@@ -119,6 +126,41 @@ def test_next_occurrence_date_ignores_entries_without_start():
     assert next_occurrence_date(meta, MONDAY) == "2026-09-05T10:00:00+00:00"
 
 
+def test_next_occurrence_date_prefers_occurrence_within_requested_period():
+    """Cas central du fix : un événement quasi quotidien doit afficher l'occurrence tombant dans
+    la période demandée, pas systématiquement la plus proche d'aujourd'hui. Constaté empiriquement
+    (eval/diagnose_hallucination.py) : pour "dimanche prochain" (13 septembre), la date affichée
+    retombait sur une occurrence plus proche mais hors période (ex. mercredi 9) — le LLM concluait
+    alors à tort qu'aucun événement ne correspondait à la période demandée."""
+    meta = {
+        "occurrences": [
+            {"start": "2026-09-08T10:00:00+00:00"},  # plus proche d'aujourd'hui, hors période
+            {"start": "2026-09-13T10:00:00+00:00"},  # dans la période demandée
+        ]
+    }
+    result = next_occurrence_date(meta, MONDAY, date_range=("2026-09-13", "2026-09-13"))
+    assert result == "2026-09-13T10:00:00+00:00"
+
+
+def test_next_occurrence_date_falls_back_when_no_occurrence_in_period():
+    """Aucune occurrence dans la période demandée -> repli sur le comportement d'origine (la plus
+    proche d'aujourd'hui), pas une absence de date."""
+    meta = {"occurrences": [{"start": "2026-09-06T10:00:00+02:00"}]}
+    result = next_occurrence_date(meta, MONDAY, date_range=("2026-09-13", "2026-09-13"))
+    assert result == "2026-09-06T10:00:00+02:00"
+
+
+def test_next_occurrence_date_without_date_range_keeps_original_behavior():
+    """date_range non fourni (valeur par défaut) -> identique à l'ancien comportement, non-régression."""
+    meta = {
+        "occurrences": [
+            {"start": "2026-10-03T10:00:00+02:00"},
+            {"start": "2026-09-06T10:00:00+02:00"},
+        ]
+    }
+    assert next_occurrence_date(meta, MONDAY) == "2026-09-06T10:00:00+02:00"
+
+
 # --- build_period_note : résolution de la période en date(s) précise(s), donnée au LLM ------
 
 
@@ -134,15 +176,13 @@ def test_build_period_note_single_day_period():
     assert note == "Précision : la période demandée dans la question correspond exactement à lundi 31 août 2026.\n\n"
 
 
-def test_build_period_note_enumerates_every_day_of_a_range():
-    """Point central du fix : pour une plage de plusieurs jours ("ce week-end"), chaque jour est
-    listé nommément avec sa date ("aux dates suivantes : ..."), pas juste "du ... au ..." — pour
-    que le LLM n'ait pas à déduire lui-même quel jour de la plage correspond au nom cité dans
-    la question."""
+def test_build_period_note_compact_range_for_multi_day_period():
+    """Plage de plusieurs jours ("ce week-end") -> format compact "du ... au ...", pas une
+    énumération jour par jour. Sûr depuis que chaque jour de semaine cité seul a sa propre
+    catégorie (period="mercredi"...), qui retombe toujours dans le cas à un seul jour ci-dessus —
+    la plage multi-jours n'a donc plus besoin de lister chaque jour nommément."""
     note = build_period_note(QueryFilters(period="ce_week_end"), MONDAY)
-    assert "aux dates suivantes" in note
-    assert "samedi 5 septembre 2026" in note
-    assert "dimanche 6 septembre 2026" in note
+    assert note == "Précision : la période demandée dans la question va du samedi 5 septembre 2026 au dimanche 6 septembre 2026 inclus.\n\n"
 
 
 def test_build_period_note_resolves_weekday_mentioned_alone():
@@ -244,5 +284,29 @@ def test_format_docs_separates_multiple_documents_with_marker():
 
 
 def test_format_docs_empty_list_returns_empty_string():
-    """Cas limite : aucun document retrouvé -> chaîne vide, pas d'exception ni de séparateur orphelin."""
+    """Cas limite : aucun document retrouvé -> chaîne vide, pas d'exception ni de séparateur orphelin.
+    Invariant central du court-circuit anti-hallucination de build_chain() (rag_chain.py) : combiné
+    à build_period_note() == "" quand period="aucune" (voir plus haut), le contexte complet d'une
+    question sans résultat ni période est bien une chaîne vide, donc "falsy" en Python — la
+    condition "if not inputs['context']" déclenche alors NO_RESULTS_MESSAGE plutôt que d'appeler
+    le LLM. Non-régression : une question sur Paris (hors zone couverte) a fait halluciner le LLM
+    malgré un contexte confirmé vide (eval/eval_results.json), d'où ce court-circuit déterministe."""
     assert format_docs([]) == ""
+
+
+def test_format_docs_passes_date_range_to_pick_relevant_occurrence():
+    """Non-régression bout en bout : format_docs() transmet bien date_range à
+    next_occurrence_date(), pour afficher l'occurrence tombant dans la période demandée plutôt
+    que la plus proche d'aujourd'hui (cf. next_occurrence_date, plus haut)."""
+    doc = make_doc(occurrences=[
+        {"start": "2026-09-08T10:00:00+00:00"},
+        {"start": "2026-09-13T10:00:00+00:00"},
+    ])
+    text = format_docs([doc], MONDAY, ("2026-09-13", "2026-09-13"))
+    assert "Date : dimanche 13 septembre 2026" in text
+
+
+def test_no_results_message_is_a_non_empty_string():
+    """Vérifie juste que la constante est bien exportée et non vide — le contenu exact n'est pas
+    figé ici pour ne pas dupliquer le texte du message dans le test."""
+    assert isinstance(NO_RESULTS_MESSAGE, str) and NO_RESULTS_MESSAGE.strip()
