@@ -1,0 +1,101 @@
+[
+  {
+    "question": "Qu'est-ce qu'on fait comme activité à l'atelier de jardinage à Marsaille ?",
+    "reference_answer": "L'atelier de jardinage à Marseille propose une découverte et une initiation au jardinage, incluant des activités comme les semis, les boutures, l'échange et le partage de graines, de plantes et de livres. Cet événement est ouvert à tout public à partir de 5 ans et se déroule à la Bibliothèque Saint-André dans le 16e Arrondissement.",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["72386972"]
+  },
+  {
+    "question": "C'est quoi le Panier dans le carnet de balade \"Marseille Patrimoine\" ?",
+    "reference_answer": "Le carnet « Marseille Patrimoine » emmène du Vieux-Port à la Major en passant dans le labyrinthe du Panier. Il guide parmi des monuments historiques marseillais comme la Maison de l’échevin de Cabre et la Maison diamantée, et invite aussi à découvrir la ville historique, ses moulins, ses ruelles et son habitat traditionnel.",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["3527061"]
+  },
+  {
+    "question": "Pouvez-vous m'expliquer ce que c'est que cette \"Plateforme\" dont tout le monde parle pour le Quartier général des jeunesses méditerranéennes ? Qu'est-ce qu'ils vont y faire exactement pendant ces 4 jours et qui va y participer ?",
+    "reference_answer": "La Plateforme est un lieu qui, du 19 au 22 mai, accueille « le Quartier général des jeunesses méditerranéennes » dans le cadre de la Saison Méditerranée 2026. Pendant ces 4 jours, elle devient un espace de rencontres et de discussions pour les jeunes de toute la Méditerranée, ainsi que pour les institutions, associations et citoyens engagés dans la région.\n\nPlus de 150 participants issus de programmes de coopération (comme Safir, l'Académie des Talents Méditerranéens ou le Social and Inclusive Business Camp) venant d'Algérie, d'Égypte, d'Espagne, de France, d'Italie, de Jordanie, du Liban, de Libye, du Maroc, de Palestine, de Syrie et de Tunisie seront présents. Ils partageront leurs expériences, leurs messages et leurs aspirations pour l'avenir de la Méditerranée.\n\nLa programmation inclut des débats d'idées variés, coordonnés par l'Agence Karkadé, avec des Agora, des ateliers, des tables rondes, des temps participatifs et des productions créatives. Une grande discussion de clôture intitulée « Paroles de Méditerranée, récits de demain » aura lieu le 22 mai à 17h00, où les participants présenteront leurs récits et échangeront avec des représentants institutionnels et de la société civile. Parmi les participants figurent des lauréats de programmes comme Safir ou l'Académie des Talents Méditerranéens, ainsi que des représentants d'organisations comme le Conseil Méditerranéen de la Jeunesse ou le Parlement des Jeunes.",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["35094496"]
+  },
+  {
+    "question": "Est-ce que les \"Pépites jeuness\" sont aussi ouvertes aux collégiens ou est-ce que c'est vraiment juste pour les élèves de primaire ? J'ai entendu parler de ces activités à la bibliothèque municipale et je me demandais si mes élèves plus âgés pourraient en profiter aussi.",
+    "reference_answer": "Les \"Pépites jeunesse\" sont réservées exclusivement aux enfants des écoles primaires. Elles permettent de découvrir des lectures d'auteurs jeunesse emblématiques, mais cette activité est spécifiquement conçue pour les élèves de primaire et n'est pas accessible aux collégiens. Le lieu indiqué pour cette activité est la bibliothèque municipale.",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["21230628"]
+  },
+  {
+    "question": "Quelles expositions historiques puis-je découvrir au Château de Tarascon, et comment réserver une visite ?",
+    "reference_answer": "Au Château de Tarascon, vous pouvez découvrir des expositions sur la vie de ce monument exceptionnel et de l'illustre roi René, ainsi que vivre la vie de château à travers la nouvelle exposition « La mode au Moyen Âge ». Pour réserver une visite, il faut appeler le 04 90 91 01 93, la capacité étant limitée. Le château se situe Place du Château de Tarascon — Centre.",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["2404987"]
+  },
+  {
+    "question": "Salut, je suis un jeune qui cherche des infos sur les opportunités pour les élèves de collége dans le cadre de Forindustrie, l'Univers Extraordinaire. Est-ce que ce truc est aussi ouvert aux collégiens ou c'est juste pour les lycéens et les étudiants ? Et qu'est-ce qu'on peut gagner si on participe ?",
+    "reference_answer": "Forindustrie, l’Univers Extraordinaire est une initiative ouverte à tous les jeunes scolaires, y compris les élèves de collège, ainsi qu’aux lycéens, étudiants et demandeurs d’emploi. Le Grand défi, intitulé « A la poursuite du Docteur Déboulon », se déroulera du 17 novembre au 5 décembre 2025 et proposera des activités interactives comme des quizz, des vidéos métiers et des rencontres avec des professionnels. À la clé, les meilleurs groupes participants pourront remporter des prix et bénéficier de visites de sites industriels offertes par des industriels partout en France.",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["52039271"]
+  },
+  {
+    "question": "Hey, c'est quoi la MAISON DU VELO pour cette rando cyclotouriste spéciale filles ?",
+    "reference_answer": "La MAISON DU VELO est le lieu où se déroule la randonnée cyclotouriste spéciale féminines organisée par le CYCLO CLUB PELISSANNE. Cette randonnée est gratuite et fait partie de l'événement \"Mai à vélo\".",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["8369894"]
+  },
+  {
+    "question": "Salut, je cherche des infos sur la \"randoné cyclotouriste\" qui a lieu en mai à Fos-sur-Mer. Est-ce que c'est vraiment gratuit et où est-ce que ça se passe exactement ? Je veux aussi savoir qui organise cet événement et si vous avez un lien pour plus de détails ?",
+    "reference_answer": "La randonnée cyclotouriste \"Mai à Vélo\" est organisée par le VÉLO CLUB FOSSEEN. Elle est gratuite et se déroule aux Arènes de Fos-sur-Mer. Vous pouvez retrouver tous les détails sur le lien suivant : [https://veloenfrance.fr/randonnee/125022](https://veloenfrance.fr/randonnee/125022).",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["78386626"]
+  },
+  {
+    "question": "Quelles activités organisées par l'UCL (Union Cycliste de Luynes) sont proposées pendant l'événement « JEUX PÉDALE EN FAMILLE », et qui peut y participer ?",
+    "reference_answer": "Pendant l'événement « JEUX PÉDALE EN FAMILLE », l'UCL (Union Cycliste de Luynes) organise les activités suivantes :\n\n1. Un atelier gratuit de découverte du tandem avec un pilote expert, accessible aux enfants, aux adultes et aux personnes en situation de handicap visuel, auditif, mental ou moteur.\n2. Un circuit fermé gratuit pour les plus jeunes enfants, afin d'apprendre à faire du vélo.\n\nCes activités sont conçues pour être inclusives et accessibles à un large public, y compris aux personnes en situation de handicap.",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["29649633"]
+  },
+  {
+    "question": "Quelle est la signification artistique des escargots dans le Jardin de MAX SAUZE à Éguilles, et comment leurs coquilles sont-elles intégrées dans les œuvres exposées ?",
+    "reference_answer": "Dans le Jardin de MAX SAUZE, les escargots, bien que disparus, ont laissé leurs coquilles qui sont utilisées de manière poétique dans les œuvres. Ces coquilles sont bien ordonnées et collées en rangs serrés sur des tiges de fer, des ballons ou du grillage, formant ainsi des constructions artistiques légères qui interagissent avec le monde végétal. Cette intégration des coquilles d'escargots contribue à créer une atmosphère merveilleuse et évidée, où les éléments naturels et les œuvres s'ajustent harmonieusement.",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["67826806"]
+  },
+  {
+    "question": "Quelles histoires mythologiques sont associées aux végétaux méditerranéens lors de la rencontre organisée par Isabelle ?",
+    "reference_answer": "Le texte ne précise pas quelles histoires mythologiques sont racontées en détail. Il indique que de nombreuses plantes sont liées à des mythologies et que, sur le parcours menant à la chapelle Saint-Ser, Isabelle fait découvrir des histoires parfois surprenantes, parfois tristes ou parfois héroïques à propos des végétaux rencontrés.",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["51363024"]
+  },
+  {
+    "question": "Excusez-moi, je cherche des informations sur un événement culturel ou une activité qui aurait lieu au \"LOCAL MARCEL CIPPICIANI\" ou quelque chose qui y ressemble... Est-ce que c'est lié à des ateliers féministes ou des initiatives pour la communauté ? J'ai peut-être mal orthographié le nom, mais c'est dans le cadre de \"Mai à vélo\" ?",
+    "reference_answer": "Le « LOCAL MARCEL CIPPICIANNI » est indiqué comme le lieu de l’événement « Randonnée cyclotouriste : Mai à vélo », organisé par le RAYON D OR DE LA CRAU. L’événement est gratuit et les détails sont indiqués à l’adresse https://veloenfrance.fr/randonnee/127601. La fiche ne mentionne pas d’ateliers féministes ni d’initiative communautaire.",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["70253590"]
+  },
+  {
+    "question": "Comment le « lancer de couteau » est-il intégré au spectacle « De la mort qui tue » ?",
+    "reference_answer": "Dans le spectacle « De la mort qui tue » de la Compagnie Du Grenier au Jardin, le lancer de couteau fait partie d'une aventure vibrante et vertigineuse qui célèbre l'urgence de vivre. Le numéro consiste en une lame qui frôle la chair, créant une expérience périlleuse mais grisante qui participe au parcours initiatique et vitaliste du spectacle. La représentation combine trapèze, vertige et lancer de couteau pour susciter des émotions intenses, un engagement physique et un sentiment de défi face à la mortalité.",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["21720813"]
+  },
+  {
+    "question": "Salut, c'est quoi cette histoire avec le Gifi Cabriès près de la Halle Plan de Campagne ? Je veux dire, comment ça s'intègre avec toute cette histoire de marché de producteurs locaux qu'ils ont là-bas ?",
+    "reference_answer": "La Halle Plan de Campagne est située « en face de Gifi Cabriès ». Le contexte décrit la Halle comme un marché de producteurs locaux organisé pour soutenir l'agriculture, proposer des produits frais de saison à prix attractifs, et favoriser les liens entre producteurs et consommateurs. Gifi Cabriès en lui-même n'est pas détaillé dans le contexte, mais la Halle se trouve à proximité, à Plan de Campagne, avec des jours de marché le lundi, mercredi et vendredi de 17h à 19h entre le 1er août et le 2 octobre 2026.",
+    "source": "ragas_generated",
+    "synthesizer": "single_hop_specific_query_synthesizer",
+    "source_event_uids": ["64963562"],
+    "caveat": "La réponse est fidèle au texte source (\"jusqu'au 2 octobre 2026\"), mais events.json est incohérent en interne pour cet événement : le champ structuré date_end s'arrête au 2026-09-04, alors que le texte annonce le marché jusqu'au 2 octobre. Une divergence RAG/réponse ici peut venir de cette incohérence de données, pas du modèle."
+  }
+]

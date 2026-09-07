@@ -156,9 +156,11 @@ def build_text(event: dict) -> str:
 def structure_event(event: dict) -> dict:
     """Extraire les champs utiles au RAG, sous un format simple et stable.
 
-    age_min/age_max valent respectivement 0 et 110 par défaut dans la donnée source
-    quand aucune restriction n'est précisée (tout public) — valeur conservée telle quelle,
-    ce n'est pas une donnée manquante.
+    age_min/age_max sont absents (None) pour la grande majorité des événements de la donnée
+    source quand aucune restriction d'âge n'est précisée (tout public) — pas 0/110 comme
+    documenté ici par erreur avant vérification empirique (4334/4502 à None sur le dataset
+    traité). Valeur conservée telle quelle ; c'est à query_filters.py::build_faiss_filter()
+    de traiter ce None comme "tout public" plutôt que comme une donnée manquante à exclure.
     """
     # Renommage des champs bruts (suffixés _fr, préfixés location_) vers des noms courts et stables,
     # pour découpler le format de sortie de la structure changeante de l'API source.

@@ -1,0 +1,167 @@
+[
+  {
+    "question": "Y a-t-il des activités culturelles disponibles en ligne ?",
+    "reference_answer": "Exemple réel vérifié : \"Activité à télécharger 'Archi'zine', un fanzine pour apprendre à dessiner le paysage et l'architecture\" (mode de participation \"En ligne\", actif au 10 octobre 2026). Le chatbot doit proposer un événement réellement en ligne, pas un événement présentiel.",
+    "generated_answer": "Oui, voici les activités culturelles disponibles en ligne à partir d'aujourd'hui (lundi 7 septembre 2026) :\n\n1. **Consultation de la plateforme Architectures en Ligne**\n   - Accès gratuit en ligne : [www.architecturesenligne.org](http://www.architecturesenligne.org)\n   - Plateforme de diffusion de conférences sur l'architecture en région PACA.\n\n2. **Livret d’activités « Au pays de l’architecture » (à partir de 6 ans)**\n   - Téléchargement gratuit : [lien](https://bit.ly/2QhxqxM)\n\n3. **Activité « Dessine ta ville »**\n   - Téléchargement gratuit : [lien](http://bit.ly/3oqWFt5)\n\n4. **Activité « Archi’zine » (fanzine pour dessiner paysage et architecture)**\n   - Téléchargement gratuit : [lien](https://bit.ly/2S7RCTM)\n\nCes activités sont accessibles dès maintenant et proposées par la Maison de l'architecture.",
+    "source": "manual",
+    "dimension": "mode_participation",
+    "faithfulness": 0.8947368421052632,
+    "answer_relevancy": 0.908642680592592,
+    "context_recall": 0.5,
+    "answer_correctness": 0.3887969787797164
+  },
+  {
+    "question": "Quelles expositions historiques puis-je découvrir au Château de Tarascon, et comment réserver une visite ?",
+    "reference_answer": "Exemple réel vérifié : deux expositions sont à découvrir au Château de Tarascon — \"Le bon roi René, chevalier des arts\" et \"La mode au Moyen Âge, élégance et prestige à la cour du Roi René\" (costumes historiques reconstitués), gratuites sans réservation (19-20 septembre 2026). Pour une visite guidée (\"Visites flash\", 30 min), réservation conseillée au 04 90 91 01 93, jauge limitée. Le chatbot doit citer des expositions réellement actives à cette date, avec le bon moyen de réservation pour la visite guidée.",
+    "generated_answer": "Voici les expositions historiques à découvrir au **Château de Tarascon** le **samedi 19 septembre 2026** :\n\n1. **\"Le bon roi René, chevalier des arts\"**\n   - Une exposition sur l’histoire du château et la vie du roi René, figure emblématique de la région.\n\n2. **\"La mode au Moyen Âge, élégance et prestige à la cour du Roi René\"**\n   - Découverte de costumes historiques reconstitués, illustrant l’art vestimentaire médiéval.\n\n**Informations pratiques** :\n- **Date et horaire** : Samedi 19 septembre 2026, à partir de **9h30** (portes ouvertes gratuites, sans réservation).\n- **Lieu** : Château de Tarascon - Centre d'art René d'Anjou (5 Boulevard du Roi René, 13150 Tarascon).\n- **Réservation** :\n  - **Visite libre** : Aucune réservation nécessaire, entrée gratuite.\n  - **Visite flash guidée** (30 min) : Réservation conseillée au **04 90 91 01 93** (jauge limitée).\n\n*Dernière entrée 45 minutes avant la fermeture.*",
+    "source": "manual",
+    "dimension": "lieu_precis_reservation",
+    "faithfulness": 0.9444444444444444,
+    "answer_relevancy": 0.9347324312712642,
+    "context_recall": 0.6666666666666666,
+    "answer_correctness": 0.6770404229560092
+  },
+  {
+    "question": "Qu'est-ce qu'on fait comme activité à l'atelier de jardinage à Marsaille ?",
+    "reference_answer": "Exemple réel vérifié : l'\"Atelier jardinage : Boutures et bouquins\" (Bibliothèque Saint-André, 16e Arrondissement de Marseille, prochaine séance le 9 septembre 2026) propose une découverte et initiation au jardinage : semis, boutures, échange et partage de graines, plantes et livres. Ouvert à tout public à partir de 5 ans. Le chatbot doit citer la bonne prochaine occurrence (9 septembre 2026), pas une séance déjà passée de cet atelier récurrent.",
+    "generated_answer": "Voici les ateliers de jardinage disponibles à Marseille dans les prochains jours :\n\n1. **Atelier jardinage : Boutures et bouquins**\n   - **Date** : Mercredi 9 septembre 2026 à 10h30 (cet après-midi)\n   - **Lieu** : Bibliothèque Saint-André (16e Arrondissement – 6 boulevard Salducci, 13016 Marseille)\n   - **Activité** : Initiation au jardinage avec semis, boutures, échange de graines, plantes et livres.\n   - **Public** : Tout public à partir de 5 ans.\n   - **Inscription** : 04 13 94 82 00\n   - [Lien](https://openagenda.com/bibliotheques-de-marseille/events/atelier-jardinage-boutures-et-bouquins-7606142)\n\n2. **Atelier Jardin** (petit jardin zen)\n   - **Date** : Samedi 3 octobre 2026 à 15h00\n   - **Lieu** : Médiathèque Salim-Hatubou (15e Arrondissement – 1 rue des Frégates, 13015 Marseille)\n   - **Activité** : Fabrication d’un petit jardin zen.\n   - **Public** : À partir de 6 ans.\n   - **Inscription** : 04 13 94 83 90\n   - [Lien](https://openagenda.com/bibliotheques-de-marseille/events/atelier-jardin-6930712)\n\nSi vous cherchez une activité **dès aujourd’hui**, l’atelier *\"Boutures et bouquins\"* est le seul disponible.",
+    "source": "manual",
+    "dimension": "evenement_recurrent",
+    "faithfulness": 0.9444444444444444,
+    "answer_relevancy": 0.8967624029472171,
+    "context_recall": 0.6666666666666666,
+    "answer_correctness": 0.5450805817398177
+  },
+  {
+    "question": "Qu'est-ce qu'il y a à faire à Marseille ce mois-ci ?",
+    "reference_answer": "Vérifié le 07/09/2026 : parmi les événements actifs à Marseille en septembre 2026 figurent l'\"Atelier jardinage : Boutures et bouquins\" (9 septembre, Bibliothèque Saint-André) et l'exposition \"AFRICA\" de Louisa Babari, en cours tout le mois au [mac] musée d'art contemporain. Le chatbot doit proposer des événements réellement actifs en septembre 2026, sans déborder sur d'autres mois sans le préciser.",
+    "generated_answer": "Voici les événements à venir à Marseille pour le reste du mois de septembre 2026 :\n\n1. **Carnet de balade urbaine \"Marseille moderne\"**\n   - **Date** : Vendredi 18 septembre 2026\n   - **Lieu** : Musée Regards de Provence (2e arrondissement)\n   - **Détails** : Carnet de visite autonome à télécharger gratuitement pour explorer l'architecture moderne de Marseille.\n   - [Lien](https://openagenda.com/culture/events/diario-de-paseo-urbano-marsella-moderna-4575451)\n\n2. **Visite et rencontre artistique : Une histoire de la Friche au cœur des luttes sociales**\n   - **Date** : Samedi 19 septembre 2026 à 10h30\n   - **Lieu** : Friche la Belle de Mai (3e arrondissement)\n   - **Inscription** : publics@chroniques.org (jauge limitée à 20 personnes).\n   - [Lien](https://openagenda.com/culture/events/visite-et-rencontre-artistique-une-histoire-de-la-friche-au-coeur-des-luttes-sociales)\n\n3. **Visites guidées de la Friche la Belle de Mai**\n   - **Dates** : Samedi 19 septembre 2026 (10h et 14h30)\n   - **Lieu** : Friche la Belle de Mai (3e arrondissement)\n   - **Réservation obligatoire** (25 personnes max par visite).\n   - [Lien](https://openagenda.com/culture/events/visites-guidees-de-la-friche-la-belle-de-mai)\n\n4. **Panier à Bulles**\n   - **Date** : Mardi 22 septembre 2026 à 17h30\n   - **Lieu** : Bibliothèque du Panier (2e arrondissement)\n   - **Détails** : Club de lecture mensuel dédié aux BD et mangas.\n   - [Lien](https://openagenda.com/bibliotheques-de-marseille/events/panier-a-bulles-4439263)",
+    "source": "manual",
+    "dimension": "periode_ce_mois",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.7740658766756974,
+    "context_recall": 0.0,
+    "answer_correctness": 0.27001409640514296
+  },
+  {
+    "question": "Qu'est-ce qu'il y a à faire à Marseille dimanche prochain ?",
+    "reference_answer": "Vérifié le 07/09/2026 (lundi) : \"dimanche prochain\" résout au 13 septembre 2026 (jour de semaine confirmé par calcul). Deux expositions sont ouvertes ce jour-là à Marseille : \"AFRICA\" de Louisa Babari (MAC - Musée d'art contemporain) et le \"Nouveau parcours des collections modernes et contemporaines\" (Musée Cantini) — leurs occurrences détaillées confirment une ouverture le 13 septembre (ces deux musées ferment le lundi, pas le dimanche). Le chatbot doit citer des événements réellement ouverts ce jour précis, pas un autre dimanche.",
+    "generated_answer": "Voici les événements disponibles à Marseille **dimanche 13 septembre 2026** :\n\n1. **Les rêves n’ont pas de titre الأحلام لا تحمل عناوين**\n   - **Heure** : 14h00\n   - **Lieu** : Friche la Belle de Mai (41 rue Jobin, 13003 Marseille)\n   - **Tarif** : 8€ (plein) / 5€ (réduit)\n   - [Plus d'infos](https://openagenda.com/saison-mediterranee-2026/events/les-reves-nont-pas-de-titre-alahlam-la-thml-anawyn)\n\n2. **Sur les ruines, les pierres fleurissent** – Exposition d’Abdessamad El Montassir\n   - **Heure** : 13h00\n   - **Lieu** : Friche la Belle de Mai (41 rue Jobin, 13003 Marseille)\n   - **Accessibilité** : Handicap moteur\n   - [Plus d'infos](https://openagenda.com/saison-mediterranee-2026/events/sur-les-ruines-les-pierres-fleurissent-exposition-personnelle-dabdessamad-el-montassir)\n\n3. **Dormir comme le soleil**\n   - **Heure** : 09h00\n   - **Lieu** : Centre de la Vieille Charité (2 Rue de la Charité, 13002 Marseille)\n   - [Plus d'infos](https://openagenda.com/saison-mediterranee-2026/events/dormir-comme-le-soleil)\n\n4. **\"Mon plus beau plan fixe\"**\n   - **Heure** : 10h10\n   - **Lieu** : Château d'If (Île d'If, 13007 Marseille)\n   - **Tarif** : 7€ (gratuit pour les -26 ans)\n   - [Plus d'infos](https://openagenda.com/saison-mediterranee-2026/events/mon-plus-beau-plan-fixe)",
+    "source": "manual",
+    "dimension": "jour_semaine_precis",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.7942081529610122,
+    "context_recall": 0.3333333333333333,
+    "answer_correctness": 0.2588371762188861
+  },
+  {
+    "question": "Que me conseillez-vous de faire à Marseille ?",
+    "reference_answer": "Question ouverte, sans contrainte précise : plusieurs réponses sont valables, il n'y a pas de réponse unique attendue. Le chatbot doit proposer un ou plusieurs événements réellement actifs à Marseille d'après les données — par exemple l'\"Atelier jardinage : Boutures et bouquins\" (9 septembre 2026, Bibliothèque Saint-André) est un exemple de réponse valable — sans inventer d'événement absent des données.",
+    "generated_answer": "Voici quelques idées d'activités culturelles à Marseille dans les prochaines semaines :\n\n1. **Carnet de balade urbaine \"Marseille moderne\"**\n   - **Quand** : Vendredi 18 septembre 2026 (disponible dès 6h)\n   - **Où** : À télécharger gratuitement pour une visite en autonomie depuis le Musée Regards de Provence (2e arrondissement).\n   - **Lien** : [Télécharger le carnet](http://carnets-balades-urbaines.fr/bonjour-tout-le-monde/)\n\n2. **Marseille au fil du temps**\n   - **Quand** : Samedi 19 septembre 2026 à 10h\n   - **Où** : Jardin Saint-Nicolas (7e arrondissement)\n   - **Pour qui** : Dès 6 ans, accompagné d’un parent. Atelier en accès libre pour découvrir l’évolution de Marseille à travers l’archéologie.\n\n3. **Balade architecturale en autonomie à Marseille (plan-guide)**\n   - **Quand** : Disponible dès le samedi 10 octobre 2026 (téléchargement gratuit)\n   - **Où** : Parcours suivant l’ancienne ligne de bus 49 (quartiers Longchamps, Belle de Mai, Joliette, Vieux-Port).\n   - **Lien** : [Télécharger le plan-guide](http://bit.ly/3mMCeYr)\n\nSi vous cherchez une activité plus immédiate, les deux premiers événements (18 et 19 septembre) sont les plus proches. Pour une exploration architecturale, le plan-guide sera disponible en octobre.",
+    "source": "manual",
+    "dimension": "question_ouverte",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.8223604661080739,
+    "context_recall": 0.0,
+    "answer_correctness": 0.2835440777638554
+  },
+  {
+    "question": "Je cherche une activité gratuite pour sortir avec mon enfant de 8 ans",
+    "reference_answer": "Exemple réel vérifié : \"Joue sur PC\" (Martigues, gratuit, 7-18 ans, tous les mercredis 14h-16h et 16h30-18h30 jusqu'au 30 septembre 2026) — atelier de découverte de jeux vidéo (Minecraft, Fortnite, Sonic...). Le chatbot doit proposer un événement réellement gratuit ET dont la tranche d'âge couvre 8 ans (age_min <= 8 <= age_max), pas une approximation sur l'un des deux critères.",
+    "generated_answer": "Voici deux activités gratuites adaptées à un enfant de 8 ans, disponibles prochainement :\n\n1. **Escape Game au théâtre des Salins** (Martigues)\n   - **Date** : Samedi 19 septembre 2026 à 10h00\n   - **Public** : Enfants de 8 à 12 ans\n   - **Infos** : Découverte ludique de l’histoire du théâtre en résolvant des énigmes. Réservation conseillée (jauge limitée).\n   - **Lien** : [Escape Game](https://openagenda.com/culture/events/escape-game-au-theatre-des-salins)\n\n2. **Jeu de piste en famille** (Eyragues)\n   - **Date** : Samedi 19 septembre 2026 à 14h30\n   - **Public** : Enfants accompagnés d’un adulte\n   - **Infos** : Parcours d’énigmes dans le village, suivi d’un goûter. Réservation conseillée.\n   - **Lien** : [Jeu de piste](https://openagenda.com/culture/events/jeu-de-piste-en-famille-1574933)",
+    "source": "manual",
+    "dimension": "contrainte_prix_et_age",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9240655756475391,
+    "context_recall": 0.0,
+    "answer_correctness": 0.20813857883770726
+  },
+  {
+    "question": "Y a-t-il des événements accessibles en fauteuil roulant ?",
+    "reference_answer": "Les données ne comportent pas de champ spécifique \"accessible en fauteuil roulant\" — seulement des labels d'accessibilité génériques (\"handicap moteur\", \"handicap visuel\", \"handicap auditif\", \"handicap intellectuel\", \"handicap psychique\"). Exemple réel vérifié : l'événement \"Le fabuleux destin de la girafe Zarafa en Provence, menez l'enquête avec un archiviste\" (Archives départementales des Bouches-du-Rhône, Marseille 3e, 19-20 septembre 2026) est marqué \"handicap moteur\". Le chatbot doit restituer ce label tel quel, sans affirmer une accessibilité en fauteuil roulant plus précise que ce que les données permettent de confirmer.",
+    "generated_answer": "Oui, voici les événements à venir accessibles en fauteuil roulant (handicap moteur) :\n\n1. **5ème fête de l'automobile**\n   - **Date** : Samedi 19 septembre 2026 à 09h00\n   - **Lieu** : La Ciotat (Esplanade Langlois)\n   - [Plus d'infos](https://openagenda.com/culture/events/5eme-fete-de-lautomobile)\n\n2. **Sur les ruines, les pierres fleurissent** (exposition)\n   - **Date** : Mercredi 9 septembre 2026 à 14h00\n   - **Lieu** : Marseille (Friche la Belle de Mai)\n   - [Plus d'infos](https://openagenda.com/saison-mediterranee-2026/events/sur-les-ruines-les-pierres-fleurissent-exposition-personnelle-dabdessamad-el-montassir)\n\n3. **Les rencontres des savoir-faire - Arles**\n   - **Date** : Dimanche 20 septembre 2026 à 10h00\n   - **Lieu** : Arles (Palais de l'Archevêché)\n   - Accessible aussi aux personnes malvoyantes.\n   - [Plus d'infos](https://openagenda.com/culture/events/les-rencontres-des-savoir-faire-arles)\n\n4. **Ouverture Musée du Patrimoine**\n   - **Date** : Samedi 19 septembre 2026 à 14h30\n   - **Lieu** : Eyragues (Parc des poètes)\n   - [Plus d'infos](https://openagenda.com/culture/events/ouverture-musee-du-patrimoine)",
+    "source": "manual",
+    "dimension": "accessibilite",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.8329554745724335,
+    "context_recall": 0.3333333333333333,
+    "answer_correctness": 0.3168230959466133
+  },
+  {
+    "question": "Quels événements y a-t-il à Salon-de-Provence ?",
+    "reference_answer": "Exemples réels vérifiés à Salon-de-Provence : les visites guidées \"Au-delà des pierres\" (église Saint-Michel, 19 septembre 2026) et un \"Double concert\" (église Saint-Michel, entrée libre dans la limite de 200 places, 20 septembre 2026). Le chatbot doit citer des événements réellement situés à Salon-de-Provence, pas une autre ville des Bouches-du-Rhône.",
+    "generated_answer": "Voici les événements à venir à Salon-de-Provence dans les prochains jours :\n\n1. **Samedi 19 septembre 2026**\n   - **« Salon-de-Provence, les hommages à Adam de Craponne »** – Circuit guidé dans le centre historique sur les traces d’Adam de Craponne (rendez-vous à 09h00 devant la statue, face à l’Hôtel de Ville).\n   - **Visites guidées du Temple protestant** – Découverte de la restauration du temple (à 14h30, durée 1h).\n\n2. **Dimanche 20 septembre 2026**\n   - **« À la découverte de l’Hôtel de Ville »** – Visite des salles et exposition sur Adam de Craponne (10h00).\n   - **DOUBLE CONCERT** – Deux rendez-vous musicaux à l’Église Saint-Michel :\n     - *Une Bande de Hautbois* (16h30-17h15)\n     - *Requiem de John Rutter* (18h-19h15).\n\n*Inscription conseillée pour certains événements (places limitées).*",
+    "source": "manual",
+    "dimension": "ville_precise",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9225064716131327,
+    "context_recall": 0.0,
+    "answer_correctness": 0.2878691336975353
+  },
+  {
+    "question": "Je veux une activité en présentiel à Aix-En-Provence, pas en ligne",
+    "reference_answer": "Exemple réel vérifié : \"Visite guidée du 6mic\" (Aix-en-Provence, gratuit sur réservation à billetterie@6mic-aix.fr, 19 septembre 2026, mode de participation \"Sur place\"). Le chatbot doit proposer un événement réellement en présentiel (\"Sur place\"), pas un événement \"En ligne\" ou \"Mixte\".",
+    "generated_answer": "Voici les activités en présentiel à Aix-en-Provence dans les prochains jours :\n\n1. **\"Deux palais, une histoire\"** – Visite guidée du palais des comtes de Provence et du palais Verdun (Cour d'appel) dans le cadre des Journées européennes du Patrimoine.\n   - **Date** : Samedi 19 septembre 2026 à 10h00\n   - **Lieu** : Cour d'appel d'Aix-en-Provence (20 place Verdun)\n   - **Tarif** : Inscription préalable requise (sessions à 10h30 et 14h00).\n\n2. **Promenade en voitures anciennes** – Balade solidaire au profit de l’association « Les p’tits bonheurs de Maëlys ».\n   - **Date** : Dimanche 20 septembre 2026 à 9h00\n   - **Lieu** : Place de Verdun (Palais de Justice)\n   - **Tarif** : 5€ par personne.\n\n3. **Formation \"Libérez le potentiel de l'IA\"** – Atelier professionnel sur l'intelligence artificielle.\n   - **Date** : Mardi 22 septembre 2026 à 9h00\n   - **Lieu** : thecamp (550 Rue Denis Papin)\n   - **Tarif** : Sur inscription (contact@cbs-group.fr).\n\nSi vous cherchez une activité ce week-end (19-20 septembre), les deux premières options sont idéales.",
+    "source": "manual",
+    "dimension": "ville_et_mode_participation",
+    "faithfulness": 0.3157894736842105,
+    "answer_relevancy": 0.8332443097047911,
+    "context_recall": 0.0,
+    "answer_correctness": 0.26677603568723224
+  },
+  {
+    "question": "Y a-t-il des événements accessibles à la fois en ligne et sur place ?",
+    "reference_answer": "Exemple réel vérifié : l'exposition \"Nador - Fragments en tension\" (Marseille, du 10 septembre au 30 octobre 2026, mode de participation \"Mixte\"). Le chatbot doit distinguer ce mode \"Mixte\" des deux autres (\"Sur place\", \"En ligne\") et ne le proposer que si la question porte vraiment sur les deux modes à la fois.",
+    "generated_answer": "D'après les événements disponibles, aucun ne propose explicitement une accessibilité à la fois en ligne et sur place. Tous les événements listés se déroulent uniquement en présentiel.",
+    "source": "manual",
+    "dimension": "mode_participation_mixte",
+    "faithfulness": 0.3333333333333333,
+    "answer_relevancy": 0.0,
+    "context_recall": 0.0,
+    "answer_correctness": 0.20189167147142417
+  },
+  {
+    "question": "Comment réserver un atelier à la bibliothèque de Marseille ?",
+    "reference_answer": "Exemple réel vérifié : l'\"Atelier reliure\" (Bibliothèque Saint-André, Marseille, 26 septembre 2026, initiation à la reliure japonaise, à partir de 15 ans) s'inscrit par téléphone au 04 13 94 82 00. Le chatbot doit proposer un événement réellement de type atelier (pas un spectacle ou une autre activité), avec un vrai moyen de réservation tiré des données.",
+    "generated_answer": "Voici les ateliers à venir à la bibliothèque de Marseille pour lesquels vous pouvez réserver, avec leurs modalités d'inscription :\n\n1. **Atelier scientifique** (pour les 8-12 ans)\n   - **Date** : vendredi 23 octobre 2026 à 14h30\n   - **Lieu** : Bibliothèque de La Grognarde (11e)\n   - **Inscription** : à partir du 15 septembre au **04 13 94 82 60**\n\n2. **Atelier broderie** (à partir de 12 ans)\n   - **Date** : samedi 24 octobre 2026 à 14h30\n   - **Lieu** : Bibliothèque de La Grognarde (11e)\n   - **Inscription** : à partir du 15 septembre au **04 13 94 82 60**\n\n3. **Atelier Broderie** (adultes, tous niveaux)\n   - **Date** : jeudi 29 octobre 2026 à 14h00\n   - **Lieu** : Bibliothèque des Cinq-Avenues (4e)\n   - **Inscription** : au **04 13 94 82 50**\n\n4. **Atelier Reliure** (à partir de 12 ans)\n   - **Date** : samedi 19 septembre 2026 à 10h00 *(déjà passé, non disponible)*\n\n**À noter** :\n- Les inscriptions pour les ateliers de La Grognarde (23 et 24 octobre) ouvrent le **15 septembre**.\n- Pour l'atelier des Cinq-Avenues (29 octobre), vous pouvez déjà appeler.\n\nConsultez les liens fournis pour plus de détails.",
+    "source": "manual",
+    "dimension": "reservation_contact",
+    "faithfulness": 0.9545454545454546,
+    "answer_relevancy": 0.8557358061342706,
+    "context_recall": 0.0,
+    "answer_correctness": 0.427877569030765
+  },
+  {
+    "question": "Quels événements sont annulés en ce moment ?",
+    "reference_answer": "Vérifié le 07/09/2026 : aucun événement au statut \"Annulé\" encore d'actualité (date non expirée) n'existe actuellement dans la base, hormis un enregistrement de test sans contenu réel (titre littéral \"test\", écarté). Le chatbot doit répondre honnêtement qu'aucun événement annulé ne correspond, sans en inventer un ni présenter à tort un événement au statut normal (\"Programmé\") comme annulé.",
+    "generated_answer": "D'après les événements listés, aucun n'est signalé comme annulé pour la période du **7 au 30 septembre 2026**. Tous les événements mentionnés sont programmés aux dates indiquées.",
+    "source": "manual",
+    "dimension": "statut_annule",
+    "faithfulness": 0.3333333333333333,
+    "answer_relevancy": 0.8601565289891989,
+    "context_recall": 0.5,
+    "answer_correctness": 0.45458621618283057
+  },
+  {
+    "question": "Quels événements y a-t-il à Paris ?",
+    "reference_answer": "Aucun événement à Paris n'existe dans la base (limitée aux Bouches-du-Rhône). Le chatbot doit le dire honnêtement, sans halluciner d'événement parisien plausible mais absent des données — c'est le bug corrigé à l'Étape 6, ce cas sert de test de non-régression.",
+    "generated_answer": "Je n'ai trouvé aucun événement correspondant à votre question dans notre base de données Puls-Events. N'hésitez pas à reformuler votre demande ou à essayer d'autres critères de recherche.",
+    "source": "manual",
+    "dimension": "hors_zone_geographique",
+    "faithfulness": 0.0,
+    "answer_relevancy": 0.0,
+    "context_recall": 0.5,
+    "answer_correctness": 0.6569435963607761
+  },
+  {
+    "question": "Quelle est la recette d'un bon gâteau au chocolat ?",
+    "reference_answer": "Le chatbot ne peut pas répondre à cette question : elle ne concerne pas les événements culturels de la base Puls-Events. Il doit le dire clairement, sans inventer de recette ni forcer un rapprochement avec un événement culinaire non pertinent.",
+    "generated_answer": "Je suis désolé, je ne peux pas répondre à cette question car elle ne concerne aucun des événements culturels ou ateliers à venir listés dans notre base. Je me limite aux informations sur les événements disponibles.",
+    "source": "manual",
+    "dimension": "hors_sujet",
+    "faithfulness": 0.0,
+    "answer_relevancy": 0.0,
+    "context_recall": 0.0,
+    "answer_correctness": 0.8249499000314696
+  }
+]
