@@ -1,0 +1,144 @@
+{
+  "info": {
+    "_postman_id": "d4761b6c-1dc8-45db-97b9-04d82db21a0c",
+    "name": "Puls-Events API",
+    "description": "Collection de requêtes pour l'API REST du POC Puls-Events (voir README.md, section \"API REST\"). Serveur local : `uv run uvicorn api.main:app --reload` (http://127.0.0.1:8000).\n\nPour POST /rebuild, remplacer <votre X_API_KEY> par la valeur de X_API_KEY définie dans votre .env (jamais commitée ici).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "/health",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://127.0.0.1:8000/health",
+          "protocol": "http",
+          "host": ["127", "0", "0", "1"],
+          "port": "8000",
+          "path": ["health"]
+        },
+        "description": "Vérification de disponibilité du serveur, indépendante de l'état de la chaîne RAG."
+      },
+      "response": []
+    },
+    {
+      "name": "/metadata",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://127.0.0.1:8000/metadata",
+          "protocol": "http",
+          "host": ["127", "0", "0", "1"],
+          "port": "8000",
+          "path": ["metadata"]
+        },
+        "description": "État des données actuellement chargées en mémoire (events_indexed, geographic_coverage, chain_available)."
+      },
+      "response": []
+    },
+    {
+      "name": "/ask",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n\t\"question\": \"Quels concerts de musique classique y a-t-il à Marseille ?\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/ask",
+          "protocol": "http",
+          "host": ["127", "0", "0", "1"],
+          "port": "8000",
+          "path": ["ask"]
+        },
+        "description": "Corps {\"question\": \"...\"} -> réponse générée par le système RAG."
+      },
+      "response": []
+    },
+    {
+      "name": "/rebuild (statut)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://127.0.0.1:8000/rebuild",
+          "protocol": "http",
+          "host": ["127", "0", "0", "1"],
+          "port": "8000",
+          "path": ["rebuild"]
+        },
+        "description": "Consulte l'état de la dernière reconstruction (idle/running/done/error) — pas de clé requise."
+      },
+      "response": []
+    },
+    {
+      "name": "/rebuild (déclencher)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Accepted\", function () {",
+              "    pm.response.to.have.status(202);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "<votre X_API_KEY>",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/rebuild",
+          "protocol": "http",
+          "host": ["127", "0", "0", "1"],
+          "port": "8000",
+          "path": ["rebuild"]
+        },
+        "description": "Nécessite l'en-tête X-API-Key. Relance le pipeline complet en tâche de fond, répond 202 immédiatement."
+      },
+      "response": []
+    }
+  ]
+}

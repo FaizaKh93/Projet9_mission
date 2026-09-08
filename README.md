@@ -2,7 +2,7 @@
 
 POC d'un chatbot capable de répondre à des questions sur des événements culturels à venir, à partir des données de l'[API Open Agenda](https://openagenda.com/), en s'appuyant sur un système RAG (Retrieval-Augmented Generation) combinant recherche vectorielle (FAISS) et génération de réponse en langage naturel (Mistral) orchestrés via LangChain, exposé par une API REST (FastAPI).
 
-## Structure du projet
+# Structure du projet
 
 ```
 notebooks/   notebooks d'exploration et de vérification (ex. 00_check_environment.ipynb)
@@ -11,11 +11,12 @@ api/         API REST FastAPI exposant le système RAG
 eval/        évaluation Ragas du RAG (jeu de test annoté, script d'évaluation) — voir plus bas
 tests/       tests automatisés (pytest) : préprocessing et API
 Dockerfile   conteneurise l'API — voir section "Conteneurisation" plus bas
+postman_collection.json   collection Postman des routes de l'API — voir section "API REST" plus bas
 ```
 
-## Architecture
+# Architecture
 
-Deux pipelines distincts : un pipeline de données (hors ligne, lancé manuellement ou via `POST /rebuild`) qui construit l'index vectoriel, et un pipeline de requête (à chaque question) qui l'interroge. Le second est protégé par les mêmes règles déterministes décrites plus bas (Chaîne RAG) — extraction de filtres, dates, anti-hallucination.
+Deux pipelines distincts : un pipeline de données (hors ligne, lancé manuellement ou via `POST /rebuild`) qui construit l'index vectoriel, et un pipeline de requête (à chaque question) qui l'interroge. Le second est protégé par les mêmes règles déterministes détaillées dans la section "Chaîne RAG" plus bas — extraction de filtres, dates, anti-hallucination.
 
 Rôle de chaque composant :
 
@@ -31,7 +32,7 @@ Composants autour du pipeline RAG, chacun détaillé dans sa propre section plus
 
 - `eval/evaluate_rag.py` — évaluation Ragas du RAG sur un jeu de test annoté (voir "Évaluation (Ragas)")
 - `tests/*.py` — suite de tests automatisés (voir "Tests")
-- `Dockerfile` — conteneurise l'API (voir "Conteneurisation (Étape 6)")
+- `Dockerfile` — conteneurise l'API (voir "Conteneurisation")
 - `.github/workflows/tests.yml` — exécute les tests à chaque push/PR (voir "Intégration continue (GitHub Actions)")
 
 ```mermaid
@@ -93,7 +94,7 @@ sequenceDiagram
     API-->>C: 200 {answer}
 ```
 
-## Reproduction de l'environnement
+# Reproduction de l'environnement
 
 Prérequis : [uv](https://docs.astral.sh/uv/) installé, Python géré automatiquement par uv (version pinnée dans `.python-version`).
 
@@ -105,7 +106,7 @@ uv sync
 
 `uv sync` recrée l'environnement virtuel `.venv/` et installe exactement les versions verrouillées dans `uv.lock`.
 
-### Clé API Mistral
+## Clé API Mistral
 
 ```bash
 cp .env.example .env
@@ -123,7 +124,7 @@ Pour utiliser l'API (voir plus bas), renseigner aussi `X_API_KEY` dans ce même 
 X_API_KEY=votre_secret_au_choix
 ```
 
-### Vérifier l'installation
+## Vérifier l'installation
 
 ```bash
 uv run jupyter notebook notebooks/00_check_environment.ipynb
@@ -131,7 +132,7 @@ uv run jupyter notebook notebooks/00_check_environment.ipynb
 
 Toutes les cellules doivent s'exécuter sans erreur (faiss, langchain_community, langchain_huggingface, mistralai, fastapi).
 
-## Pipeline de données
+# Pipeline de données
 
 Pas de reconstruction automatique de l'index pour ce POC : les scripts se lancent manuellement, dans l'ordre, avant de démarrer l'API.
 
@@ -139,7 +140,7 @@ Pas de reconstruction automatique de l'index pour ce POC : les scripts se lancen
 uv run python scripts/fetch_events.py
 ```
 
-Récupère les événements culturels des Bouches-du-Rhône de moins d'un an (source : [miroir Opendatasoft des données Open Agenda](https://public.opendatasoft.com/explore/dataset/evenements-publics-openagenda/), aucune clé API requise) et les sauvegarde dans `data/raw/events.json`.
+Récupère les événements culturels des Bouches-du-Rhône de moins d'un an (source : [miroir Opendatasoft des données Open Agenda](https://public.opendatasoft.com/explore/dataset/evenements-publics-openagenda/), aucune clé API requise) et les sauvegarde dans `data/raw/events.json`. Résilient aux pannes réseau transitoires : `fetch_page()` réessaie automatiquement (jusqu'à 3 fois, délai croissant) via `tenacity` avant d'abandonner.
 
 ```bash
 uv run python scripts/preprocess_events.py
@@ -152,9 +153,9 @@ Nettoie et structure les événements bruts : exclut les sources hors-sujet (for
 | Champ | Où | Pourquoi |
 |---|---|---|
 | `uid`, `url`, `date_start`, `date_end` | Structuré | Identifiants/dates exacts, fiables |
-| `occurrences` | Structuré | Liste des créneaux individuels d'un événement récurrent (extraite du champ brut `timings`) — `date_start`/`date_end` ne donnent que la 1ère et la dernière occurrence, insuffisant pour savoir laquelle est encore à venir ou si une occurrence tombe réellement dans une période demandée (voir `next_occurrence_date()` et `occurrence_in_period()`, plus bas) |
+| `occurrences` | Structuré | Liste des créneaux individuels d'un événement récurrent (extraite du champ brut `timings`) — `date_start`/`date_end` ne donnent que la 1ère et la dernière occurrence, insuffisant pour savoir laquelle est encore à venir ou si une occurrence tombe réellement dans une période demandée (voir "Chaîne RAG", plus bas) |
 | `status` | Les deux | Structuré pour filtrage exact ; ajouté au texte seulement si ≠ "Programmé" (annulé/reprogrammé), pour que le LLM puisse répondre "cet événement est-il maintenu ?" |
-| `attendance_mode` | Structuré | Sur place / En ligne / Mixte — filtrage exact (recherche hybride, voir Étape 4) |
+| `attendance_mode` | Structuré | Sur place / En ligne / Mixte — filtrage exact (recherche hybride, voir "Chaîne RAG") |
 | `location_city` | Structuré | Filtrage exact (recherche hybride) + affiché |
 | `location_name`, `location_district` | Les deux | Noms propres qu'une question peut citer directement (ex. "à la médiathèque Louis Aragon"), utiles à la recherche sémantique — ET affichés (bloc "Établissement") pour préciser le lieu au-delà de la seule ville |
 | `location_address`, `location_postalcode`, `location_phone`, `location_website`, `location_links`, `registration_link`, `online_access_link` | Structuré | Contact/pratique — affichés tels quels dans le contexte transmis au LLM (`format_docs()`) quand renseignés, jamais vectorisés (aucune valeur de recherche sémantique) |
@@ -180,13 +181,13 @@ Exclus, avec une vraie raison à chaque fois :
 uv run python scripts/vectorize_events.py
 ```
 
-Découpe le texte de chaque événement en chunks (`langchain_text_splitters`, les textes courts ne produisent le plus souvent qu'un seul chunk) et génère leurs embeddings via l'API Mistral (`mistral-embed`, payant — nécessite `MISTRAL_API_KEY` dans `.env`). Sauvegarde le résultat dans `data/vectors/events_vectors.json` — **clôture l'Étape 2** ("prêt à être indexé"), sans construire l'index FAISS lui-même (Étape 3). Coût estimé sur ce dataset : ~0,08 $ pour 4241 événements.
+Découpe le texte de chaque événement en chunks (`langchain_text_splitters`, les textes courts ne produisent le plus souvent qu'un seul chunk) et génère leurs embeddings via l'API Mistral (`mistral-embed`, payant — nécessite `MISTRAL_API_KEY` dans `.env`). Sauvegarde le résultat dans `data/vectors/events_vectors.json`, prêt à être indexé, sans construire l'index FAISS lui-même (fait par `build_index.py`, juste après). Coût estimé sur ce dataset : ~0,08 $ pour 4241 événements.
 
 ```bash
 uv run python scripts/build_index.py
 ```
 
-Étape 3 — construit l'index vectoriel FAISS à partir des vecteurs déjà calculés par `vectorize_events.py` (`FAISS.from_embeddings()`, aucun nouvel appel à Mistral), sauvegardé dans `data/index/` (`index.faiss` + `index.pkl`). Vérifie que le nombre de vecteurs indexés correspond au nombre de vecteurs chargés.
+Construit l'index vectoriel FAISS à partir des vecteurs déjà calculés par `vectorize_events.py` (`FAISS.from_embeddings()`, aucun nouvel appel à Mistral), sauvegardé dans `data/index/` (`index.faiss` + `index.pkl`). Vérifie que le nombre de vecteurs indexés correspond au nombre de vecteurs chargés.
 
 ```bash
 uv run jupyter notebook notebooks/04_search_evaluation.ipynb
@@ -194,33 +195,30 @@ uv run jupyter notebook notebooks/04_search_evaluation.ipynb
 
 Charge l'index et teste 5 questions représentatives (thème+lieu, filtre prix implicite, thème culturel différent, statut "Annulé", requête hors-sujet) pour vérifier la pertinence des résultats — la demande explicite du brief ("tests de recherche pour vérifier l'efficacité").
 
-Étape 4 — `scripts/query_filters.py` + `scripts/rag_chain.py` assemblent la chaîne RAG complète (recherche + génération). La recherche est **hybride** : une recherche purement sémantique ne sait pas comparer une date à aujourd'hui, ce qui produisait de mauvaises réponses sur des questions temporelles ("ce week-end" renvoyait des événements passés ou le mauvais week-end). `query_filters.py` extrait de la question, via `mistral-small-latest` (`with_structured_output`), les critères explicitement exprimés — période, ville, âge, mode de participation — puis `rag_chain.py` convertit ces critères en filtre FAISS (`similarity_search(question, filter=..., fetch_k=<taille totale de l'index>)`), appliqué **en plus de** la recherche sémantique, pas à sa place :
-- la période ("ce week-end", "cette semaine"...) est convertie en plage de dates par calcul Python déterministe (`timedelta`), jamais par le LLM — un LLM s'est montré peu fiable pour calculer une vraie plage de dates ;
-- `fetch_k` est monté à la taille totale de l'index car le filtre FAISS s'applique *après* la recherche par similarité sur les `fetch_k` voisins les plus proches (pas un pré-filtre) — sans cela, le filtre pourrait n'avoir aucun événement valide à examiner ;
-- un filtre vide laisse la recherche sémantique agir seule, sans restriction ;
-- le filtre sur les dates compare `date_end`/`date_start` par CHEVAUCHEMENT (`date_end >= début période` ET `date_start <= fin période`), pas seulement `date_start` seul, pour garder un événement déjà commencé mais encore en cours pendant la période demandée ;
-- si la question ne précise AUCUNE période, un filtre par défaut `date_end >= aujourd'hui` s'applique quand même — un événement déjà terminé n'est jamais une réponse valable, et ce tri ne peut pas être laissé au LLM au moment de la génération (constaté empiriquement : il compare mal une date à aujourd'hui même avec la date du jour fournie dans le prompt, ex. confondre un jour du mois similaire avec "aujourd'hui").
+# Chaîne RAG
 
-**Événements récurrents** : `date_start`/`date_end` ne représentent que la 1ère et la dernière occurrence d'un événement récurrent (ex. un atelier chaque samedi d'avril à juin) — insuffisant pour deux choses, corrigées séparément :
-- **Affichage** : `next_occurrence_date()` (rag_chain.py) calcule, à partir de `occurrences`, la prochaine date pertinente à partir d'aujourd'hui, plutôt que de toujours montrer la toute première occurrence (potentiellement déjà passée) ;
-- **Filtrage précis** : `occurrence_in_period()` (query_filters.py) revérifie, après la recherche FAISS, qu'une occurrence réelle tombe bien dans la période demandée — le filtre FAISS seul (chevauchement `date_start`/`date_end`) pourrait laisser passer à tort un événement dont les occurrences sont espacées (ex. avril puis octobre) pour une question sur juin. Limite assumée : ce second contrôle s'applique après que la recherche a déjà limité les résultats à `k` documents — un événement écarté à ce stade n'est pas remplacé par un autre candidat plus bas dans le classement.
+`scripts/query_filters.py` + `scripts/rag_chain.py` assemblent la recherche et la génération. La recherche est **hybride** : une recherche purement sémantique ne sait pas comparer une date à aujourd'hui, ce qui produisait de mauvaises réponses sur des questions temporelles ("ce week-end" renvoyait des événements passés ou le mauvais week-end). `query_filters.py` extrait de la question, via `mistral-small-latest` (`with_structured_output`), les critères explicitement exprimés — période, ville, âge, mode de participation — puis `rag_chain.py` convertit ces critères en filtre FAISS (`similarity_search(question, filter=..., fetch_k=<taille totale de l'index>)`), appliqué **en plus de** la recherche sémantique, pas à sa place :
+- la période ("ce week-end", "cette semaine"...) est convertie en plage de dates par calcul Python déterministe (`timedelta`), jamais par le LLM — peu fiable pour calculer une vraie plage de dates ;
+- `fetch_k` est monté à la taille totale de l'index car le filtre FAISS s'applique *après* la recherche par similarité, pas comme un pré-filtre — sans cela, le filtre pourrait n'avoir aucun événement valide à examiner ;
+- le filtre sur les dates compare `date_end`/`date_start` par CHEVAUCHEMENT, pas seulement `date_start` seul, pour garder un événement déjà commencé mais encore en cours pendant la période demandée ;
+- sans période précisée, un filtre par défaut `date_end >= aujourd'hui` s'applique quand même — un événement terminé n'est jamais une réponse valable, et ce tri ne peut pas être laissé au LLM (peu fiable pour comparer une date à aujourd'hui, même avec la date du jour fournie dans le prompt).
 
-`format_docs()` (rag_chain.py) met en forme le contexte transmis au LLM : titre, date (formatée en français avec jour de la semaine précalculé par `format_date_fr()` — jamais laissé au LLM, qui s'est trompé en le déduisant lui-même d'une date ISO brute), lieu, tarif, établissement, adresse, téléphone, site, réseaux sociaux, inscription, accès en ligne — chaque champ optionnel n'est ajouté que s'il est renseigné, pour éviter qu'un champ manquant (`None`) apparaisse littéralement dans le prompt et soit repris tel quel par le LLM.
+**Événements récurrents** : `date_start`/`date_end` ne représentent que la 1ère et la dernière occurrence d'un événement récurrent (ex. un atelier chaque samedi d'avril à juin) — insuffisant pour l'affichage ET le filtrage, corrigés séparément : `next_occurrence_date()` (rag_chain.py) calcule la prochaine date pertinente à afficher ; `occurrence_in_period()` (query_filters.py) revérifie après la recherche FAISS qu'une occurrence réelle tombe dans la période demandée (le filtre FAISS seul, sur `date_start`/`date_end`, pourrait laisser passer à tort un événement aux occurrences espacées, ex. avril puis octobre pour une question sur juin). Limite assumée : ce second contrôle s'applique après que la recherche a déjà limité les résultats à `k` documents — un événement écarté à ce stade n'est pas remplacé par un autre candidat plus bas dans le classement.
 
-**Anti-hallucination sur un contexte vide** (trouvé en testant le déploiement Docker, Étape 6) : une question hors de la zone couverte (ex. "événements à Paris") produit un filtre qui ne retourne aucun document — contexte entièrement vide. Le `SYSTEM_PROMPT` d'origine ne couvrait que le cas "des événements sont listés, mais aucun ne correspond après tri par date" ; sur un contexte VRAIMENT vide, le LLM comblait le vide avec sa propre connaissance générale (des lieux parisiens réels mais absents de notre base). Corrigé une première fois en ajoutant une consigne explicite pour ce cas, formulée sans jamais nommer la zone géographique couverte (Bouches-du-Rhône) — la nommer risquerait au contraire d'inciter le LLM à halluciner des réponses *plausibles pour cette région précise*, plus difficiles à détecter qu'une hallucination sur Paris.
+`format_docs()` (rag_chain.py) met en forme le contexte transmis au LLM : titre, date (calculée en français par `format_date_fr()`, jamais laissée au LLM, qui s'est trompé en la déduisant lui-même d'une date ISO brute), lieu, tarif, établissement, adresse, contact, inscription, accès en ligne — chaque champ optionnel n'apparaît que s'il est renseigné, pour éviter qu'un champ manquant (`None`) apparaisse littéralement dans le prompt.
 
-**Récidive constatée pendant l'évaluation Ragas** (`eval/eval_results.json`) : la même question sur Paris a de nouveau produit 3 événements parisiens inventés, alors que le contexte était confirmé réellement vide (`eval/diagnose_hallucination.py`) — la consigne textuelle seule ne garantit donc pas un comportement à 100% des appels, même à `temperature=0`. Corrigé cette fois en **court-circuitant le LLM en Python** (`generate_or_refuse()`, `build_chain()`) : si le contexte récupéré est vide, une réponse fixe (`NO_RESULTS_MESSAGE`) est renvoyée directement, sans appeler `mistral-large-latest` du tout — garantie déterministe plutôt qu'une reformulation probabiliste de plus du prompt, cohérent avec la philosophie déjà suivie ailleurs (calculer en Python ce qui peut l'être). `eval/evaluate_rag.py` applique le même court-circuit, pour évaluer exactement le comportement réel de l'API.
+**Bugs trouvés et corrigés en testant/évaluant le système :**
 
-**Ville mal filtrée par une casse inhabituelle** (même diagnostic) : `extract_filters()` reprend souvent la casse telle qu'écrite dans la question (ex. "Aix-En-Provence" tapé par l'utilisateur), jamais passée par `preprocess_events.py::normalize_city()` (qui ne s'exécute qu'une fois, côté données, pas au moment de la requête). Le filtre FAISS compare des chaînes strictement égales (`$eq`) : `"Aix-En-Provence" != "Aix-en-Provence"` (casse réelle en base) faisait échouer le filtre à tort, alors que de vrais événements existent — contexte vide par erreur de filtrage, pas par absence réelle de résultat. Corrigé par `normalize_location_city()` (`query_filters.py`) : recale la ville extraite sur sa casse exacte dans `data/processed/events.json`, comparaison insensible à la casse (pas un simple `.title()` — Python capitalise après chaque tiret, `"aix-en-provence".title()` redonnerait exactement le bug).
+| Bug | Trouvé via | Cause | Correction |
+|---|---|---|---|
+| Hallucination sur un contexte vide (ex. "événements à Paris") — récidivé une 1re fois après un correctif textuel, puis une 2e fois pendant l'évaluation Ragas | Test du déploiement Docker, puis `eval/eval_results.json` | Une consigne textuelle seule ne garantit pas un comportement à 100% des appels, même à `temperature=0` — le LLM comble un contexte VRAIMENT vide avec sa propre connaissance | Court-circuit déterministe en Python (`generate_or_refuse()`) : `NO_RESULTS_MESSAGE` renvoyé directement si le contexte est vide, sans appeler le LLM |
+| Ville mal filtrée par une casse inhabituelle (ex. "Aix-En-Provence") | Diagnostic du contexte vide (`eval/diagnose_hallucination.py`) | `extract_filters()` reprend la casse telle qu'écrite par l'utilisateur ; le filtre FAISS (`$eq`) compare des chaînes strictement égales | `normalize_location_city()` recale la ville sur sa casse exacte dans les données, comparaison insensible à la casse |
+| Date affichée incohérente avec la période demandée (ex. "dimanche prochain") | Faux négatif creusé avec `eval/diagnose_hallucination.py` étendu | `next_occurrence_date()` affichait toujours l'occurrence la plus proche d'aujourd'hui, jamais celle de la période demandée | `date_range` transmis à `next_occurrence_date()`/`format_docs()` — priorité à une occurrence dans la période demandée |
+| Jour de semaine cité seul (ex. "mercredi", "ce samedi") mal interprété | Constaté empiriquement (fiable un appel sur deux) | Ne correspondait à aucune des 4 catégories de `QueryFilters.period` | 7 jours ajoutés comme catégories à part entière + `build_period_note()` transmet la date déjà résolue au LLM |
 
-**Date affichée incohérente avec la période demandée** (trouvé en creusant un faux négatif sur "dimanche prochain", `eval/diagnose_hallucination.py` étendu pour l'occasion) : pour un événement récurrent quasi quotidien (ex. une exposition), `next_occurrence_date()` affichait toujours l'occurrence la plus proche d'AUJOURD'HUI, jamais celle tombant dans la période réellement demandée — alors qu'`occurrence_in_period()` (query_filters.py) avait déjà vérifié qu'une occurrence existait bien ce jour-là. Le LLM voyait donc des événements "datés" du 7-9 septembre pour une question sur le 13, et concluait honnêtement (mais à tort) qu'aucun ne correspondait — la consigne du prompt ("ne garde que les événements dont la date tombe dans la période") était suivie correctement, seule l'information affichée était fausse. Corrigé en donnant à `next_occurrence_date()`/`format_docs()` la plage de dates demandée (`date_range`, calculée une fois dans `retrieve_context()` via `period_to_date_range()`) : priorité à une occurrence tombant dans cette plage, repli sur le comportement d'origine (plus proche d'aujourd'hui) si aucune n'y tombe ou si aucune période n'est demandée.
+Deux précisions qui ne tenaient pas dans le tableau : la consigne anti-hallucination ne nomme jamais "Bouches-du-Rhône" — la nommer risquerait d'inciter le LLM à halluciner des réponses *plausibles pour cette région précise*, plus difficiles à détecter qu'une hallucination sur Paris. Et `ce_mois`/`cette_semaine` partagent le même principe que le filtre par défaut : jamais avant aujourd'hui, même si le début théorique de la période (1er du mois, lundi de la semaine) est déjà passé.
 
-**Jour de la semaine cité seul, sans autre période** (ex. "mercredi", "ce samedi") : ne correspondait à l'origine à aucune des 4 catégories de `QueryFilters.period` (`aujourd'hui`/`ce_week_end`/`cette_semaine`/`semaine_prochaine`) — `extract_filters()` retombait alors sur `"aucune"`, et le LLM de génération devait calculer lui-même la date de ce jour à partir d'une large liste d'événements futurs non filtrée, de façon non fiable (vérifié empiriquement : correct un appel sur deux). Corrigé par deux ajouts complémentaires :
-- `QueryFilters.period` reconnaît maintenant aussi les 7 jours de la semaine comme catégories à part entière ; `period_to_date_range()` calcule la prochaine occurrence exacte de ce jour (aujourd'hui inclus si "today" tombe déjà sur ce jour) — un seul jour, jamais une plage.
-- `build_period_note()` (rag_chain.py) transmet au LLM de génération la période déjà résolue en dates précises, plutôt que de le laisser recalculer "quel jour de la plage correspond à quel nom" — un seul jour cité donne une date unique ; une plage de plusieurs jours (`ce_week_end`, `cette_semaine`, `semaine_prochaine`, `ce_mois`) donne un format compact "du ... au ...", suffisant depuis que chaque jour cité seul a sa propre catégorie ci-dessus (plus besoin d'énumérer chaque jour d'une plage). `ChatMistralAI(..., temperature=0)` en complément (comme `extract_filters()`), pour réduire la variabilité résiduelle d'un appel à l'autre — sans garantir un déterminisme parfait (calcul flottant non associatif, service réparti), d'où l'importance du fix ci-dessus, qui traite la cause plutôt que d'espérer un comportement stable.
-- `ce_mois` (période mensuelle, ex. "ce mois-ci") et la borne basse de `cette_semaine` partagent le même principe : jamais avant aujourd'hui, même si le début "théorique" de la période (1er du mois, lundi de la semaine) est déjà passé — un événement déjà terminé n'est jamais une réponse valable.
-
-**Limite connue, non traitée à ce stade** : la chaîne est *stateless* — `chain.invoke(question)` ne connaît que la question du tour actuel, aucun historique de conversation n'est conservé. Une question de suivi sans contexte explicite (ex. "je veux l'url de l'événement" après une première question) n'a structurellement aucun moyen d'être résolue correctement.
+**Limite connue, non traitée à ce stade** : la chaîne est *stateless* — `chain.invoke(question)` ne connaît que la question du tour actuel, aucun historique de conversation n'est conservé (voir "Perspectives").
 
 ```bash
 uv run jupyter notebook notebooks/05_rag_chain_evaluation.ipynb
@@ -228,7 +226,7 @@ uv run jupyter notebook notebooks/05_rag_chain_evaluation.ipynb
 
 Teste 6 scénarios représentatifs sur la chaîne complète (thème+lieu, contrainte de prix, question multi-contraintes, événement annulé signalé comme tel dans la réponse, question hors-sujet, question temporelle ambiguë) — nécessite `MISTRAL_API_KEY` (génération payante).
 
-## API REST (Étape 5)
+# API REST
 
 ```bash
 uv run uvicorn api.main:app --reload
@@ -240,7 +238,7 @@ Démarre l'API sur `http://127.0.0.1:8000`. Documentation Swagger interactive g�
 |---|---|---|
 | `/` | GET | Informations générales, pointeur vers `/docs`. |
 | `/health` | GET | Vérification de disponibilité du serveur, indépendante de l'état de la chaîne RAG. |
-| `/metadata` | GET | État des données **actuellement chargées en mémoire** (`events_indexed`, `geographic_coverage`, `chain_available`) — pas de clé requise, lecture seule. Différent de `GET /rebuild` (ci-dessous), qui décrit l'état du *processus* de reconstruction, pas les données réellement en mémoire : `events_indexed` ici vient de `app.state.total_vectors`, mis à jour à chaque construction de la chaîne (démarrage **et** après un `/rebuild`), donc toujours à jour même si le dernier index a été construit manuellement en local, pas via l'API. Après un `POST /rebuild`, le nouveau compte n'apparaît qu'une fois le pipeline réellement terminé (`GET /rebuild` → `"state": "done"`), pas dès le `202` immédiat renvoyé par `POST /rebuild`. |
+| `/metadata` | GET | État des données actuellement en mémoire (`events_indexed`, `geographic_coverage`, `chain_available`) — pas de clé requise. Différent de `GET /rebuild` : reflète les données réellement chargées (mis à jour à chaque construction de la chaîne), pas l'état du processus de reconstruction. Après un `POST /rebuild`, attendre `"state": "done"` sur `GET /rebuild` avant de voir le nouveau compte ici. |
 | `/ask` | POST | Corps `{"question": "..."}` → réponse générée. `422` si la question est vide/absente, `503` si la chaîne n'a pas pu être construite au démarrage, `502` en cas d'échec du service Mistral. |
 | `/rebuild` | POST | **Nécessite l'en-tête HTTP `X-API-Key`**, avec la valeur de `X_API_KEY` définie dans `.env` — sans elle, `401 Unauthorized`. Relance le pipeline complet (`fetch_events` → `preprocess_events` → `vectorize_events` → `build_index`) en tâche de fond et recharge la chaîne RAG, sans redémarrer le serveur. Répond immédiatement `202 Accepted`, sans attendre la fin du pipeline (plusieurs minutes, appel payant à Mistral). `409 Conflict` si un rebuild est déjà en cours. |
 | `/rebuild` | GET | Consulte l'état de la dernière reconstruction (`idle`/`running`/`done`/`error`) — pas de clé requise, lecture seule. |
@@ -283,11 +281,13 @@ response.raise_for_status()
 print(response.json()["answer"])
 ```
 
-## Conteneurisation (Étape 6)
+**Collection Postman** : `postman_collection.json` (à la racine du repo) — les 5 routes ci-dessus prêtes à importer (`Import` dans Postman). Le header `X-API-Key` contient un texte de substitution (`<votre X_API_KEY>`), pas une vraie clé — à remplacer par votre propre valeur après import, jamais commitée ici.
+
+# Conteneurisation
 
 `Dockerfile` conteneurise uniquement l'**API** (`api/main.py`) — pas le pipeline de données. `scripts/fetch_events.py`/`preprocess_events.py`/`vectorize_events.py`/`build_index.py` continuent de tourner hors Docker, comme avant (en local, ou via `POST /rebuild` qui les exécute à l'intérieur du conteneur en cours d'exécution).
 
-**Choix délibéré (Approche 1, discutée et validée) : l'index FAISS (`data/index/`) n'est jamais intégré à l'image, il est monté en volume au lancement.** Alternative envisagée — l'intégrer à l'image au moment du `docker build` — écartée pour deux raisons : ça obligerait à faire circuler `MISTRAL_API_KEY` au moment de la construction de l'image (mauvaise pratique de sécurité, même avec les "build secrets" de BuildKit, qui protègent l'image finale mais pas la machine qui construit), et ça ne correspond pas à un besoin de rafraîchissement récurrent des données (chaque mise à jour obligerait à reconstruire toute l'image plutôt qu'un simple appel à `POST /rebuild`, déjà prévu pour ça).
+**Choix délibéré : l'index FAISS (`data/index/`) n'est jamais intégré à l'image, il est monté en volume au lancement.** L'alternative (l'intégrer au `docker build`) est écartée pour deux raisons : elle exposerait `MISTRAL_API_KEY` à la machine de build (même avec les "build secrets" de BuildKit, qui protègent l'image finale mais pas la machine qui construit), et elle obligerait à reconstruire toute l'image à chaque rafraîchissement de données plutôt qu'un simple `POST /rebuild`.
 
 ```bash
 docker build -t projet9-rag-api .
@@ -307,7 +307,7 @@ docker run -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" projet9-rag-a
 MSYS_NO_PATHCONV=1 docker run -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" projet9-rag-api
 ```
 
-### Tests
+# Tests
 
 ```bash
 uv run pytest tests/ -v
@@ -319,13 +319,9 @@ uv run pytest tests/ -v
 
 `tests/test_query_filters.py` et `tests/test_rag_chain.py` testent la logique pure de `query_filters.py` (calcul de périodes — dont les 7 jours de la semaine cités seuls —, filtre FAISS, vérification des occurrences) et de `rag_chain.py` (formatage des dates, sélection de la prochaine occurrence, résolution de la période en note pour le LLM via `build_period_note()`, mise en forme du contexte) — aucune dépendance à Mistral ou FAISS, entièrement déterministes. Seule exception : les tests de `normalize_location_city()` lisent normalement `data/processed/events.json` pour connaître la casse réelle des villes — la fixture `fake_processed_events` (redirige `PROCESSED_PATH` vers un petit fichier JSON factice via `monkeypatch`) les en affranchit aussi.
 
-`tests/test_fetch_events.py` et `tests/test_vectorize_events.py` testent `fetch_events.py` et `vectorize_events.py`, appels réseau/API inclus — un choix différent du reste du projet (voir juste en dessous) : `httpx.get()` est mocké (pagination simulée sur plusieurs pages factices) et `MistralAIEmbeddings` est remplacé par une classe factice (`embed_documents()` renvoie des vecteurs fixes), sans clé API ni appel réel. Ce mock est jugé représentatif ici parce que le comportement à vérifier (pagination, condition d'arrêt, assemblage chunk_id/texte/métadonnée/vecteur) est purement mécanique et ne dépend pas de la qualité d'une réponse — contrairement à mocker une génération Mistral, dont la valeur réelle ne se résume pas à sa structure (cf. `retrieve_context()` ci-dessous, volontairement non mocké).
+`tests/test_fetch_events.py` et `tests/test_vectorize_events.py` testent `fetch_events.py` et `vectorize_events.py`, appels réseau/API inclus — un choix différent du reste du projet (voir juste en dessous) : `httpx.get()` est mocké (pagination simulée sur plusieurs pages factices, et retry testé en simulant un échec suivi d'un succès) et `MistralAIEmbeddings` est remplacé par une classe factice (`embed_documents()` renvoie des vecteurs fixes), sans clé API ni appel réel. Ce mock est jugé représentatif ici parce que le comportement à vérifier (pagination, retry, assemblage chunk_id/texte/métadonnée/vecteur) est purement mécanique et ne dépend pas de la qualité d'une réponse — contrairement à mocker une génération Mistral, dont la valeur réelle ne se résume pas à sa structure (cf. `retrieve_context()` ci-dessous, volontairement non mocké).
 
 Fonctions volontairement non testées unitairement (appels réseau réels — Mistral et/ou disque, dont la qualité de réponse ne peut pas être vérifiée par un mock) : `build_index.py`, `preprocess_events.py::load_raw_events`, `query_filters.py::extract_filters`, `rag_chain.py::retrieve_context`/`answer_question`. Validées autrement, via `notebooks/04_search_evaluation.ipynb`/`05_rag_chain_evaluation.ipynb` et l'exécution réelle du pipeline complet.
-
-### Intégration continue (GitHub Actions)
-
-`.github/workflows/tests.yml` relance toute la suite (`uv run pytest tests/ -v`) à chaque push et pull request. Aucun secret requis : ni `MISTRAL_API_KEY` ni les données du pipeline (`data/`, gitignorées) ne sont nécessaires — vérifié empiriquement en renommant temporairement `data/index/` et `data/processed/` en local, les 4 fichiers de test passent intégralement sans eux, grâce au garde-fou de `lifespan()` ci-dessus et à `fake_processed_events` ci-dessus.
 
 Rapport de couverture (nécessite `pytest-cov`, dépendance de dev déjà installée) :
 
@@ -335,11 +331,15 @@ uv run pytest tests/ --cov=scripts --cov=api --cov-report=html
 
 Génère `htmlcov/index.html` (gitignoré, régénérable). Couverture répartie sans trou sur toute la logique testable unitairement (100% sur les fonctions pures citées ci-dessus), le reste correspondant aux appels réseau réels listés juste au-dessus — nombre de tests et pourcentage exact à régénérer via la commande ci-dessus (évoluent au fil des ajouts, non figés ici pour éviter un chiffre obsolète).
 
-## Évaluation (Ragas)
+# Intégration continue (GitHub Actions)
+
+`.github/workflows/tests.yml` relance toute la suite (`uv run pytest tests/ -v`) à chaque push et pull request. Aucun secret requis : ni `MISTRAL_API_KEY` ni les données du pipeline (`data/`, gitignorées) ne sont nécessaires — vérifié empiriquement en renommant temporairement `data/index/` et `data/processed/` en local, les fichiers de test passent intégralement sans eux, grâce au garde-fou de `lifespan()` et à `fake_processed_events` décrits dans "Tests" ci-dessus.
+
+# Évaluation (Ragas)
 
 `eval/qa_dataset_manual.json` — jeu de test annoté, entièrement écrit et vérifié à la main contre `data/processed/events.json` (pas généré), seul fichier consommé par `evaluate_rag.py`. Chaque paire question/réponse de référence porte un `source_event_uids` (liste, vide pour les questions hors-sujet/hors-zone géographique où aucun événement source n'est attendu) pointant vers le ou les événements réels utilisés pour écrire la réponse — traçabilité vérifiable, pas une réponse inventée. Les paires dont la réponse dépend de la date du jour portent aussi `time_sensitive: true` et `verified_on` (date de vérification), pour rester honnête sur leur péremption possible.
 
-**`eval/generate_testset.py` — alternative explorée puis abandonnée**, conservée dans le repo à titre de documentation (voir son docstring pour le détail complet) ; `eval/qa_dataset_generated.json` (sa sortie lors de l'essai, 14 paires) conservé de même, à titre historique uniquement — non consommé par `evaluate_rag.py`. Génère des paires via la génération de jeu de test synthétique de Ragas (`TestsetGenerator`), à partir de vrais documents du dataset. Abandonnée pour deux raisons constatées sur cet essai : (1) la génération ne tient pas compte de la fraîcheur des événements piochés — 10/14 portaient sur des événements déjà passés au moment de l'évaluation, un chatbot fidèle à sa consigne anti-hallucination ne pouvant alors jamais y répondre correctement, quelle que soit sa qualité réelle ; (2) Ragas ne renvoie aucun lien vers l'événement source (uid), et `data/processed/events.json` contient de nombreux doublons (même activité reconduite à plusieurs dates) — un matching automatique par mots-clés s'est trompé sur plusieurs paires, détecté seulement en comparant les réponses réellement générées par le RAG aux données réelles.
+**`eval/generate_testset.py` — alternative explorée puis abandonnée** (conservée à titre de documentation, voir son docstring ; sa sortie `eval/qa_dataset_generated.json`, 14 paires, gardée comme trace historique, non utilisée par `evaluate_rag.py`). Génère des paires via `TestsetGenerator` de Ragas, à partir de vrais documents du dataset — abandonnée pour deux raisons : (1) la génération ignore la fraîcheur des événements piochés (10/14 déjà passés au moment de l'évaluation, invalidant tout chatbot fidèle à sa consigne anti-hallucination) ; (2) Ragas ne renvoie aucun lien vers l'événement source, et les nombreux doublons du dataset (même activité reconduite à plusieurs dates) ont fait échouer un matching automatique par mots-clés sur plusieurs paires.
 
 `eval/evaluate_rag.py` — exécute la chaîne RAG (retrieval + génération, comme `rag_chain.py`) sur chaque question de `qa_dataset_manual.json` et calcule 4 métriques Ragas : `faithfulness` (ancrage au contexte récupéré), `answer_relevancy` (pertinence à la question), `context_recall` et `answer_correctness` (les deux dernières comparées au ground truth). Contourne 3 bugs réels de `ragas==0.4.3` avec Mistral, vérifiés empiriquement (détail en commentaire à chaque contournement dans le fichier) : import `ChatVertexAI` cassé, API "collections" incompatible avec le client Mistral, combinaison de `token_usage` cassée dans `langchain_mistralai` au-delà d'une génération combinée. Sauvegarde incrémentale dans `eval/eval_results.json` (question par question, pas seulement à la fin) — un plantage (ex. limite de débit de l'API Mistral, déjà rencontrée) ne fait alors perdre que la question en cours.
 
@@ -347,11 +347,11 @@ Génère `htmlcov/index.html` (gitignoré, régénérable). Couverture répartie
 uv run python eval/evaluate_rag.py
 ```
 
-`notebooks/06_rag_evaluation.ipynb` charge `eval/eval_results.json` (résultats déjà calculés, pas de nouvel appel Mistral) pour une présentation lisible des scores 
+`notebooks/06_rag_evaluation.ipynb` charge `eval/eval_results.json` (résultats déjà calculés, pas de nouvel appel Mistral) pour une présentation lisible des scores.
 
 Chaque `source_event_uids` de `qa_dataset_manual.json` a été vérifié à la main contre l'événement réel correspondant dans `data/processed/events.json` (titre, dates, tarif, texte) au moment de la rédaction du jeu de test — pas juste supposé correct.
 
-### Résultats de l'évaluation
+## Résultats de l'évaluation
 
 Moyennes sur les 15 questions de `qa_dataset_manual.json` (`eval/eval_results.json`) :
 
@@ -372,7 +372,7 @@ Moyennes sur les 15 questions de `qa_dataset_manual.json` (`eval/eval_results.js
 
 **Couverture des événements** : pas mesurée comme une métrique séparée — `context_recall` en tient déjà lieu au niveau du jeu de test (est-ce que les bons événements source sont bien retrouvés pour chaque question), voir plus haut. Une vraie mesure de couverture du corpus entier (quelle proportion des 4241 événements est un jour réellement retrouvable par une question) demanderait une analyse bien plus lourde, hors du périmètre de ce POC.
 
-## Perspectives
+# Perspectives
 
 - **Mémoire conversationnelle** — Ajouter un historique de conversation à la chaîne (ex. `RunnableWithMessageHistory` de LangChain, qui réinjecte les échanges précédents dans le prompt) pour résoudre les questions de suivi comme "l'url de cet événement ?".
 - **Rafraîchissement automatique** — Programmer l'appel à `POST /rebuild` sur un intervalle régulier (ex. un workflow GitHub Actions déclenché chaque nuit via `on: schedule`) pour garder la base à jour sans intervention manuelle.
