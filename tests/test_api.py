@@ -62,6 +62,53 @@ def test_health(client):
     assert response.json() == {"status": "ok"}
 
 
+# --- GET /metadata : état des données actuellement servies, pas l'état du pipeline ----------
+
+
+def test_metadata_reflects_currently_loaded_chain(client, monkeypatch):
+    """Chaîne construite avec succès -> events_indexed/chain_available reflètent app.state."""
+    monkeypatch.setattr(app.state, "chain", FakeChain())
+    monkeypatch.setattr(app.state, "total_vectors", 4241)
+    response = client.get("/metadata")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["events_indexed"] == 4241
+    assert body["chain_available"] is True
+    assert body["geographic_coverage"] == "Bouches-du-Rhône"
+
+
+def test_metadata_when_chain_not_built(client, monkeypatch):
+    """chain is None (échec au démarrage) -> chain_available=False, events_indexed=None, pas d'erreur."""
+    monkeypatch.setattr(app.state, "chain", None)
+    monkeypatch.setattr(app.state, "total_vectors", None)
+    response = client.get("/metadata")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["events_indexed"] is None
+    assert body["chain_available"] is False
+
+
+def test_metadata_reflects_new_count_after_rebuild(client, monkeypatch):
+    """Non-régression du point discuté : après un /rebuild qui indexe un nombre différent
+    d'événements, /metadata doit refléter ce nouveau nombre, pas rester figé sur l'ancien."""
+    monkeypatch.setattr(app.state, "chain", FakeChain())
+    monkeypatch.setattr(app.state, "total_vectors", 4241)
+    monkeypatch.setenv("X_API_KEY", "test-key")
+    monkeypatch.setattr(app.state, "rebuild_status", RebuildStatus(state="idle"))
+    monkeypatch.setattr(api_main.fetch_events, "main", lambda: None)
+    monkeypatch.setattr(api_main.preprocess_events, "main", lambda: None)
+    monkeypatch.setattr(api_main.vectorize_events, "main", lambda: None)
+    monkeypatch.setattr(api_main.build_index, "main", lambda: 4502)
+    monkeypatch.setattr(api_main, "build_chain", lambda: (FakeChain(), 4502))
+
+    # TestClient exécute les tâches de fond de façon synchrone (voir test_rebuild_success_updates_status) :
+    # le rebuild mocké est déjà terminé au retour de ce POST.
+    client.post("/rebuild", headers={"X-API-Key": "test-key"})
+
+    body = client.get("/metadata").json()
+    assert body["events_indexed"] == 4502
+
+
 # --- POST /ask ------------------------------------------------------------------------------
 
 
@@ -150,7 +197,8 @@ def test_rebuild_success_updates_status(client, monkeypatch):
     monkeypatch.setattr(api_main.preprocess_events, "main", lambda: None)
     monkeypatch.setattr(api_main.vectorize_events, "main", lambda: None)
     monkeypatch.setattr(api_main.build_index, "main", lambda: 42)
-    monkeypatch.setattr(api_main, "build_chain", lambda: FakeChain())
+    # build_chain() renvoie désormais (chain, total_vectors) — voir rag_chain.py.
+    monkeypatch.setattr(api_main, "build_chain", lambda: (FakeChain(), 42))
 
     response = client.post("/rebuild", headers={"X-API-Key": "test-key"})
     assert response.status_code == 202

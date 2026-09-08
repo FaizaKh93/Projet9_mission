@@ -11,6 +11,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
+# tenacity : lib de retry — ajoute une nouvelle tentative automatique en cas d'échec, sans avoir
+# à écrire la boucle try/except/sleep à la main.
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 # Dataset public "Événements Publics - OpenAgenda", miroir Opendatasoft du site openagenda.com.
 API_URL = "https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/evenements-publics-openagenda/records"
@@ -36,6 +39,34 @@ def build_where_clause() -> str:
     return f'location_department="{LOCATION_DEPARTMENT}" AND firstdate_begin>="{one_year_ago}"'
 
 
+@retry(
+    # stop_after_attempt(3) : 3 tentatives au total (1 essai + 2 réessais), pas 3 réessais en plus
+    # du premier essai — après ça, tenacity laisse remonter la dernière exception normalement.
+    stop=stop_after_attempt(3),
+    # wait_exponential : attend de plus en plus longtemps entre chaque tentative (1s puis 2s ici,
+    # avec multiplier=1 -> 1 x 2^0, 1 x 2^1...) plutôt qu'un intervalle fixe — laisse le temps à
+    # une panne temporaire du serveur de se résorber, sans le marteler de requêtes immédiates.
+    wait=wait_exponential(multiplier=1),
+)
+def fetch_page(where_clause: str, offset: int) -> dict:
+    """Récupérer UNE SEULE page de résultats, avec retry automatique sur échec HTTP.
+
+    Isolée dans sa propre fonction (plutôt que l'appel direct dans fetch_all_events() d'avant)
+    parce que @retry rejoue toute la fonction qu'il décore à chaque tentative — il doit donc
+    entourer seulement l'appel réseau lui-même, pas toute la boucle de pagination (qui, elle, ne
+    doit jamais être répétée depuis le début à cause d'une seule page en échec).
+    """
+    response = httpx.get(
+        API_URL,
+        params={"where": where_clause, "limit": PAGE_SIZE, "offset": offset},
+        timeout=30,
+    )
+    # C'est cette exception (levée sur une erreur HTTP 4xx/5xx) que @retry détecte pour déclencher
+    # une nouvelle tentative — par défaut, tenacity réessaie sur n'importe quelle exception.
+    response.raise_for_status()
+    return response.json()
+
+
 def fetch_all_events() -> list[dict]:
     """Récupérer tous les événements correspondant au filtre, en parcourant les pages de résultats."""
     where_clause = build_where_clause()
@@ -45,13 +76,7 @@ def fetch_all_events() -> list[dict]:
     # Boucle de pagination : l'API ne renvoie que PAGE_SIZE résultats par appel,
     # donc répétition de l'appel en avançant offset jusqu'à couvoir la totalité des résultats.
     while True:
-        response = httpx.get(
-            API_URL,
-            params={"where": where_clause, "limit": PAGE_SIZE, "offset": offset},
-            timeout=30,
-        )
-        response.raise_for_status()  # Interruption immédiate en cas d'erreur HTTP (ex. requête mal formée).
-        payload = response.json()
+        payload = fetch_page(where_clause, offset)
 
         page_results = payload["results"]
         events.extend(page_results)

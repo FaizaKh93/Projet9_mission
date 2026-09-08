@@ -12,6 +12,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import httpx
+
 # scripts/ n'est pas un package installé (pas de __init__.py) : on ajoute son chemin à sys.path
 # pour pouvoir écrire "import fetch_events" juste en dessous, comme si c'en était un.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
@@ -48,6 +50,34 @@ def test_build_where_clause_contains_department_and_recent_date():
     # artificiellement une date dans ce test.
     expected_date = (datetime.now(timezone.utc) - timedelta(days=fetch_events.WINDOW_DAYS)).strftime("%Y-%m-%d")
     assert f'firstdate_begin>="{expected_date}"' in where_clause
+
+
+# --- fetch_page : retry automatique (tenacity) sur échec HTTP -------------------------------
+
+
+def test_fetch_page_retries_after_transient_failure(monkeypatch):
+    """Un premier appel qui échoue (erreur HTTP simulée) suivi d'un second qui réussit -> le
+    retry de tenacity doit rattraper l'échec tout seul, sans faire remonter l'exception au
+    premier essai. Vérifie que le retry se déclenche réellement, pas juste que le décorateur
+    @retry est présent dans le code."""
+    calls = []
+
+    def flaky_get(url, params, timeout):
+        calls.append(params)
+        if len(calls) == 1:
+            # Simule une vraie erreur HTTP (ex. panne serveur temporaire, 500) — c'est ce type
+            # d'exception que response.raise_for_status() lèverait sur une vraie réponse en erreur.
+            request = httpx.Request("GET", url)
+            response = httpx.Response(500, request=request)
+            raise httpx.HTTPStatusError("erreur simulée", request=request, response=response)
+        return FakeResponse({"results": [{"uid": "1"}], "total_count": 1})
+
+    monkeypatch.setattr(fetch_events.httpx, "get", flaky_get)
+
+    payload = fetch_events.fetch_page("where=1", 0)
+
+    assert payload == {"results": [{"uid": "1"}], "total_count": 1}
+    assert len(calls) == 2  # 1er appel en échec + réessai réussi, pas plus
 
 
 # --- fetch_all_events : pagination, httpx.get() mocké --------------------------------------
