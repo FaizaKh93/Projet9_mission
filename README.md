@@ -37,25 +37,25 @@ Composants autour du pipeline RAG, chacun détaillé dans sa propre section plus
 
 ```mermaid
 flowchart TD
-    subgraph DataPipeline["Pipeline de donnees (offline, POST /rebuild)"]
-        A["fetch_events.py / Open Agenda (Opendatasoft)"] --> B["data/raw/events.json"]
-        B --> C["preprocess_events.py / nettoyage, structuration"]
+    subgraph DataPipeline["Pipeline de donnees<br/>(offline, POST /rebuild)"]
+        A["fetch_events.py<br/>Open Agenda (Opendatasoft)"] --> B["data/raw/events.json"]
+        B --> C["preprocess_events.py<br/>nettoyage, structuration"]
         C --> D["data/processed/events.json"]
-        D --> E["vectorize_events.py / embeddings mistral-embed"]
+        D --> E["vectorize_events.py<br/>embeddings mistral-embed"]
         E --> F["data/vectors/events_vectors.json"]
-        F --> G["build_index.py / FAISS.from_embeddings"]
-        G --> H[("data/index/ / index FAISS")]
+        F --> G["build_index.py<br/>FAISS.from_embeddings"]
+        G --> H[("data/index/<br/>index FAISS")]
     end
 
-    subgraph QueryPipeline["Pipeline de requete (a chaque question)"]
-        I(["Client"]) -->|"POST /ask"| J["api/main.py / app.state.chain (mis en cache)"]
-        J --> K["rag_chain.py / retrieve_context"]
-        K --> L["query_filters.py / extract_filters / mistral-small-latest"]
-        L --> M["build_faiss_filter / + recherche semantique"]
-        M --> N["occurrence_in_period / 2e passage, evenements recurrents"]
+    subgraph QueryPipeline["Pipeline de requete<br/>(a chaque question)"]
+        I(["Client"]) -->|"POST /ask"| J["api/main.py<br/>app.state.chain (mis en cache)"]
+        J --> K["rag_chain.py<br/>retrieve_context"]
+        K --> L["query_filters.py<br/>extract_filters / mistral-small-latest"]
+        L --> M["build_faiss_filter<br/>+ recherche semantique"]
+        M --> N["occurrence_in_period<br/>2e passage, evenements recurrents"]
         N --> O{"Contexte vide ?"}
-        O -->|"oui"| P["NO_RESULTS_MESSAGE / pas d'appel LLM"]
-        O -->|"non"| Q["prompt + LLM / mistral-large-latest, temp=0"]
+        O -->|"oui"| P["NO_RESULTS_MESSAGE<br/>pas d'appel LLM"]
+        O -->|"non"| Q["prompt + LLM<br/>mistral-large-latest, temp=0"]
         P --> R(["Reponse JSON"])
         Q --> R
     end
