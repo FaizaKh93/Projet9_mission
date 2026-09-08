@@ -7,13 +7,91 @@ POC d'un chatbot capable de répondre à des questions sur des événements cult
 ```
 notebooks/   notebooks d'exploration et de vérification (ex. 00_check_environment.ipynb)
 scripts/     scripts du pipeline de données (récupération, nettoyage, indexation)
-api/         API REST FastAPI exposant le système RAG (Étape 5)
+api/         API REST FastAPI exposant le système RAG
 eval/        évaluation Ragas du RAG (jeu de test annoté, script d'évaluation) — voir plus bas
 tests/       tests automatisés (pytest) : préprocessing et API
-Dockerfile   conteneurise l'API (Étape 6) — voir section "Conteneurisation" plus bas
+Dockerfile   conteneurise l'API — voir section "Conteneurisation" plus bas
 ```
 
-Le dossier `docs/` sera ajouté au fil des étapes suivantes, au moment où il sera réellement utilisé.
+## Architecture
+
+Deux pipelines distincts : un pipeline de données (hors ligne, lancé manuellement ou via `POST /rebuild`) qui construit l'index vectoriel, et un pipeline de requête (à chaque question) qui l'interroge. Le second est protégé par les mêmes règles déterministes décrites plus bas (Chaîne RAG) — extraction de filtres, dates, anti-hallucination.
+
+Rôle de chaque composant :
+
+- `fetch_events.py` — récupère les événements bruts (API Opendatasoft / Open Agenda)
+- `preprocess_events.py` — nettoie et structure les données
+- `vectorize_events.py` — découpe en chunks et calcule les embeddings (`mistral-embed`)
+- `build_index.py` — construit l'index vectoriel FAISS
+- `query_filters.py` — extrait les filtres d'une question et calcule les dates/périodes
+- `rag_chain.py` — assemble recherche + génération, gère l'anti-hallucination
+- `api/main.py` — expose le tout en REST (FastAPI)
+
+Composants autour du pipeline RAG, chacun détaillé dans sa propre section plus bas :
+
+- `eval/evaluate_rag.py` — évaluation Ragas du RAG sur un jeu de test annoté (voir "Évaluation (Ragas)")
+- `tests/*.py` — suite de tests automatisés (voir "Tests")
+- `Dockerfile` — conteneurise l'API (voir "Conteneurisation (Étape 6)")
+- `.github/workflows/tests.yml` — exécute les tests à chaque push/PR (voir "Intégration continue (GitHub Actions)")
+
+```mermaid
+flowchart TD
+    subgraph DataPipeline["Pipeline de donnees (offline, POST /rebuild)"]
+        A["fetch_events.py / Open Agenda (Opendatasoft)"] --> B["data/raw/events.json"]
+        B --> C["preprocess_events.py / nettoyage, structuration"]
+        C --> D["data/processed/events.json"]
+        D --> E["vectorize_events.py / embeddings mistral-embed"]
+        E --> F["data/vectors/events_vectors.json"]
+        F --> G["build_index.py / FAISS.from_embeddings"]
+        G --> H[("data/index/ / index FAISS")]
+    end
+
+    subgraph QueryPipeline["Pipeline de requete (a chaque question)"]
+        I(["Client"]) -->|"POST /ask"| J["api/main.py / app.state.chain (mis en cache)"]
+        J --> K["rag_chain.py / retrieve_context"]
+        K --> L["query_filters.py / extract_filters / mistral-small-latest"]
+        L --> M["build_faiss_filter / + recherche semantique"]
+        M --> N["occurrence_in_period / 2e passage, evenements recurrents"]
+        N --> O{"Contexte vide ?"}
+        O -->|"oui"| P["NO_RESULTS_MESSAGE / pas d'appel LLM"]
+        O -->|"non"| Q["prompt + LLM / mistral-large-latest, temp=0"]
+        P --> R(["Reponse JSON"])
+        Q --> R
+    end
+
+    H -.->|"charge au demarrage"| M
+```
+
+Déroulé détaillé d'un `POST /ask` (diagramme de séquence) :
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as api/main.py
+    participant RAG as rag_chain.py
+    participant QF as query_filters.py
+    participant M1 as Mistral (extraction)
+    participant FA as FAISS
+    participant M2 as Mistral (génération)
+
+    C->>API: POST /ask {question}
+    API->>RAG: chain.invoke(question)
+    RAG->>QF: extract_filters(question)
+    QF->>M1: extraction structurée (mistral-small-latest)
+    M1-->>QF: QueryFilters (période, ville, âge, mode)
+    QF-->>RAG: filters
+    RAG->>FA: similarity_search(question, filter=faiss_filter)
+    FA-->>RAG: top-k documents
+    RAG->>RAG: occurrence_in_period() (2e passage)
+    alt contexte non vide
+        RAG->>M2: prompt rempli (mistral-large-latest, temp=0)
+        M2-->>RAG: réponse générée
+    else contexte vide
+        RAG-->>RAG: NO_RESULTS_MESSAGE (court-circuit, aucun appel LLM)
+    end
+    RAG-->>API: réponse texte
+    API-->>C: 200 {answer}
+```
 
 ## Reproduction de l'environnement
 
@@ -69,7 +147,7 @@ uv run python scripts/preprocess_events.py
 
 Nettoie et structure les événements bruts : exclut les sources hors-sujet (forums emploi France Travail, ~49% du volume brut) et les événements incomplets ou mal géocodés (texte vide, date/uid manquants, code postal hors Bouches-du-Rhône, présentiel sans aucune localisation, en ligne sans lien d'accès), normalise la casse des noms de ville, extrait les champs utiles (dates, lieu, tarifs, âge, accessibilité, contact...) et construit le texte à vectoriser. Écrit le résultat dans `data/processed/events.json`.
 
-**Répartition des champs bruts (56) vers `data/processed/events.json` (25 champs structurés + texte vectorisé) :**
+**Répartition des champs bruts (56) vers `data/processed/events.json` (24 champs structurés + 1 champ texte vectorisé, 25 champs au total) :**
 
 | Champ | Où | Pourquoi |
 |---|---|---|
@@ -80,9 +158,9 @@ Nettoie et structure les événements bruts : exclut les sources hors-sujet (for
 | `location_city` | Structuré | Filtrage exact (recherche hybride) + affiché |
 | `location_name`, `location_district` | Les deux | Noms propres qu'une question peut citer directement (ex. "à la médiathèque Louis Aragon"), utiles à la recherche sémantique — ET affichés (bloc "Établissement") pour préciser le lieu au-delà de la seule ville |
 | `location_address`, `location_postalcode`, `location_phone`, `location_website`, `location_links`, `registration_link`, `online_access_link` | Structuré | Contact/pratique — affichés tels quels dans le contexte transmis au LLM (`format_docs()`) quand renseignés, jamais vectorisés (aucune valeur de recherche sémantique) |
-| `location_insee` | Structuré | Vérification interne de la fiabilité du géocodage au nettoyage (`build_known_cities()`) — jamais affiché ni vectorisé, aucun intérêt pour répondre à une question |
+| `location_insee` | Structuré | Passé tel quel depuis les données brutes ; utilisé une fois en exploration (`notebooks/01_raw_data_exploration.ipynb`) pour vérifier la cohérence `location_city`/code INSEE, mais pas exploité par le pipeline actif (`build_known_cities()` ne compare que `location_city`/`location_postalcode`) — jamais affiché ni vectorisé |
 | `age_min`, `age_max` | Structuré | Filtrage exact ("pour un enfant de 8 ans ?") — gardés malgré une faible fréquence de remplissage |
-| `accessibility_labels` | Vectorisé | Intégré au texte plutôt qu'en filtre structuré : c'est une métadonnée en LISTE, et le filtre FAISS (`$in`) ne sait vérifier qu'une valeur scalaire parmi une liste acceptée, pas l'inverse ("cette liste contient-elle X ?") — la recherche sémantique sur une formulation libre ("accessible en fauteuil roulant") est plus simple à ce stade |
+| `accessibility_labels` | Les deux | Métadonnée en LISTE, structurée ET ajoutée au texte — mais jamais utilisée comme filtre exact : le filtre FAISS (`$in`) ne sait vérifier qu'une valeur scalaire parmi une liste acceptée, pas l'inverse ("cette liste contient-elle X ?"). Seule la recherche sémantique sur une formulation libre ("accessible en fauteuil roulant") l'exploite réellement, d'où sa présence dans le texte vectorisé |
 | `conditions` (tarifs) | Les deux | Structuré pour affichage exact, ET ajouté au texte pour la recherche sémantique ("événements gratuits") |
 | `keywords` | Les deux | Structuré (liste), ET ajoutés au texte pour renforcer le matching sémantique |
 | `title` | Les deux | Affichage en métadonnée, ET ajouté en tête du texte vectorisé pour la correspondance sur le nom de l'événement |
@@ -90,8 +168,13 @@ Nettoie et structure les événements bruts : exclut les sources hors-sujet (for
 
 Exclus, avec une vraie raison à chaque fois :
 - `category`, `country_fr`, `location_countrycode` — constants/vides sur tout le dataset, aucune information
-- `contributor_email`/`contactnumber`/`contactname`/`contactposition` — données personnelles du contributeur, pas de place dans une donnée exposée publiquement
-- `slug`, `location_uid`, `originagenda_uid`, `image*` — identifiants/médias internes à la plateforme, sans valeur pour répondre à une question
+- `contributor_email`, `contributor_contactnumber`, `contributor_contactname`, `contributor_contactposition`, `contributor_organization` — données du contributeur, pas de place dans une donnée exposée publiquement par un chatbot
+- `slug`, `location_uid`, `originagenda_uid` — identifiants internes à la plateforme, sans valeur pour répondre à une question
+- `image`, `imagecredits`, `originalimage`, `location_image`, `location_imagecredits`, `thumbnail` — médias, non exploités par cette API (pas de diffusion d'images à ce stade)
+- `accessibility` — doublon brut de `accessibility_label_fr` (libellés lisibles), déjà repris via ce dernier
+- `daterange_fr`, `firstdate_end`, `lastdate_begin` — variantes/doublons de `firstdate_begin`/`lastdate_end`, déjà repris en `date_start`/`date_end`
+- `location_access_fr`, `location_description_fr`, `location_coordinates`, `location_department`, `location_region`, `location_tags` — informations de localisation redondantes avec les champs déjà gardés (`location_city`, `location_address`, `location_district`...) ou hors du périmètre utile à ce POC
+- `links` (racine, différent de `location_links`), `updatedat` — aucun usage identifié pour répondre à une question
 
 ```bash
 uv run python scripts/vectorize_events.py
@@ -197,11 +280,11 @@ uv run pytest tests/ -v
 
 `tests/test_query_filters.py` et `tests/test_rag_chain.py` testent la logique pure de `query_filters.py` (calcul de périodes — dont les 7 jours de la semaine cités seuls —, filtre FAISS, vérification des occurrences) et de `rag_chain.py` (formatage des dates, sélection de la prochaine occurrence, résolution de la période en note pour le LLM via `build_period_note()`, mise en forme du contexte) — aucune dépendance à Mistral ou FAISS, entièrement déterministes. Seule exception : les tests de `normalize_location_city()` lisent normalement `data/processed/events.json` pour connaître la casse réelle des villes — la fixture `fake_processed_events` (redirige `PROCESSED_PATH` vers un petit fichier JSON factice via `monkeypatch`) les en affranchit aussi.
 
+Fonctions volontairement non testées unitairement (appels réseau réels — Mistral et/ou disque) : `fetch_events.py`, `vectorize_events.py`, `build_index.py`, `preprocess_events.py::load_raw_events`, `query_filters.py::extract_filters`, `rag_chain.py::retrieve_context`/`answer_question`. Validées autrement, via `notebooks/04_search_evaluation.ipynb`/`05_rag_chain_evaluation.ipynb` et l'exécution réelle du pipeline complet.
+
 ### Intégration continue (GitHub Actions)
 
 `.github/workflows/tests.yml` relance toute la suite (`uv run pytest tests/ -v`) à chaque push et pull request. Aucun secret requis : ni `MISTRAL_API_KEY` ni les données du pipeline (`data/`, gitignorées) ne sont nécessaires — vérifié empiriquement en renommant temporairement `data/index/` et `data/processed/` en local, les 4 fichiers de test passent intégralement sans eux, grâce au garde-fou de `lifespan()` ci-dessus et à `fake_processed_events` ci-dessus.
-
-Fonctions volontairement non testées unitairement (appels réseau réels — Mistral et/ou disque) : `fetch_events.py`, `vectorize_events.py`, `build_index.py`, `preprocess_events.py::load_raw_events`, `query_filters.py::extract_filters`, `rag_chain.py::retrieve_context`/`answer_question`. Validées autrement, via `notebooks/04_search_evaluation.ipynb`/`05_rag_chain_evaluation.ipynb` et l'exécution réelle du pipeline complet.
 
 Rapport de couverture (nécessite `pytest-cov`, dépendance de dev déjà installée) :
 
@@ -227,6 +310,23 @@ uv run python eval/evaluate_rag.py
 
 Chaque `source_event_uids` de `qa_dataset_manual.json` a été vérifié à la main contre l'événement réel correspondant dans `data/processed/events.json` (titre, dates, tarif, texte) au moment de la rédaction du jeu de test — pas juste supposé correct.
 
+### Résultats de l'évaluation
+
+Moyennes sur les 15 questions de `qa_dataset_manual.json` (`eval/eval_results.json`) :
+
+| Métrique | Moyenne |
+|---|---|
+| Faithfulness | 0.71 |
+| Answer relevancy | 0.69 |
+| Context recall | 0.23 |
+| Answer correctness | 0.40 |
+
+**Faithfulness** et **answer relevancy** sont les deux métriques les plus interprétables ici : elles jugent la réponse par rapport au contexte réellement récupéré, pas par rapport à une seule réponse de référence. 0.71 est correct mais tiré vers le bas par 3 questions à 0.32–0.33 (à investiguer : affirmations reformulées non retrouvées telles quelles dans le contexte par le juge Ragas) et 2 questions à 0.0 sur des réponses de refus (« Quels événements y a-t-il à Paris ? », « Quelle est la recette d'un bon gâteau au chocolat ? ») — un refus ne contient aucune affirmation factuelle à vérifier, la métrique n'est donc pas interprétable dans ce cas précis (limite connue de Ragas sur ce type de réponse, pas un signe de mauvaise réponse : ce sont justement les deux comportements attendus, hors-zone et hors-sujet).
+
+**Context recall** et **answer correctness** sont structurellement bas, et c'est attendu plutôt qu'un signe de mauvaise qualité : ces deux métriques comparent la réponse à LA SEULE `reference_answer` du jeu de test, qui ne cite qu'un exemple réel parmi plusieurs événements valides pour les questions larges (ex. « Qu'est-ce qu'il y a à faire à Marseille ce mois-ci ? »). Le chatbot répond alors avec d'autres événements tout aussi valides mais absents de cette référence unique — d'où un score bas malgré une réponse correcte, vérifié manuellement en comparant plusieurs réponses générées aux données réelles.
+
+**Limite à noter pour la soutenance** : le juge Ragas (LLM) n'est pas parfaitement déterministe même à `temperature=0` — deux exécutions successives sur les mêmes réponses générées (texte identique) ont donné des scores de faithfulness différents pour 3 questions (ex. 0.90 puis 0.32 pour la même réponse). Les scores ci-dessus donnent donc un ordre de grandeur, pas une mesure à la décimale près.
+
 ## Statut
 
 Étape 1 — configuration de l'environnement (terminée).
@@ -234,4 +334,8 @@ Chaque `source_event_uids` de `qa_dataset_manual.json` a été vérifié à la m
 Étape 3 — base de données vectorielle FAISS (terminée : index construit via `FAISS.from_embeddings()` à partir des vecteurs déjà calculés, 7169/7169 vecteurs vérifiés, tests de recherche effectués dans `notebooks/04_search_evaluation.ipynb`).
 Étape 4 — chaîne RAG (recherche + génération) : `scripts/rag_chain.py` + `scripts/query_filters.py` (recherche hybride filtre+sémantique, événements récurrents, affichage enrichi des métadonnées — voir plus haut). Terminée (mergée sur `main`).
 Étape 5 — API REST (terminée) : `api/main.py` (FastAPI, endpoints `/`, `/health`, `/ask`, `/rebuild` — voir plus haut). Jeu de test annoté (15 paires, `eval/qa_dataset_manual.json`) + évaluation automatisée (Ragas, `eval/evaluate_rag.py`) terminés (voir section "Évaluation" plus haut) — non demandés explicitement par l'Étape 5, ajoutés après coup.
-Étape 6 — conteneurisation (en cours) : `Dockerfile`/`.dockerignore` (voir section "Conteneurisation" plus haut), `/ask` et `/rebuild` vérifiés fonctionnels dans le conteneur (volume `data/` monté, clés transmises via `--env-file`). Deux bugs trouvés et corrigés en testant le déploiement : hallucination sur un contexte vide, calcul de date pour un jour de semaine cité seul (voir section "Chaîne RAG" plus haut). 117 tests, couverture 80%, sans trou hors appels réseau réels (voir section Tests). Restent : scénarios de démo, présentation PowerPoint.
+Étape 6 — conteneurisation (terminée) : `Dockerfile`/`.dockerignore` (voir section "Conteneurisation" plus haut), `/ask` et `/rebuild` vérifiés fonctionnels dans le conteneur (volume `data/` monté, clés transmises via `--env-file`). Deux bugs trouvés et corrigés en testant le déploiement : hallucination sur un contexte vide, calcul de date pour un jour de semaine cité seul (voir section "Chaîne RAG" plus haut).
+
+Au-delà des étapes numérotées : jeu de test annoté + évaluation Ragas complets (voir "Évaluation" plus haut), 3 bugs supplémentaires trouvés et corrigés pendant cette évaluation (récidive de l'hallucination sur contexte vide, filtre ville sensible à la casse, date affichée incohérente pour un événement récurrent — voir section "Chaîne RAG"), intégration continue (GitHub Actions, voir section "Tests"), schéma d'architecture (voir section "Architecture" plus haut). Couverture de tests sans trou hors appels réseau réels (voir section Tests, chiffres exacts non figés ici — se régénèrent via la commande fournie).
+
+Restent : scénarios de démo pour la soutenance, présentation, section "Résultats" consolidée dans ce README (synthèse des scores d'évaluation), exemples curl pour l'API.
