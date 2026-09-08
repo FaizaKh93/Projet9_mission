@@ -77,6 +77,16 @@ class RebuildAck(BaseModel):
     status: Literal["started"]
 
 
+class MetadataResponse(BaseModel):
+    """État des données actuellement servies par /ask — pas l'état du pipeline (voir /rebuild)."""
+
+    events_indexed: int | None = Field(
+        default=None, description="Nombre d'événements actuellement chargés en mémoire, None si la chaîne n'a pas pu être construite."
+    )
+    geographic_coverage: str = Field(..., description="Zone géographique couverte par les données.")
+    chain_available: bool = Field(..., description="False si /ask répondrait 503 (échec de build_chain()).")
+
+
 # Header(default=None) : paramètre optionnel affiché directement dans les "Parameters" de
 # l'opération /rebuild sur Swagger (champ texte simple, à remplir avant "Execute"), plutôt
 # que via le bouton "Authorize" global (mécanisme fastapi.security.APIKeyHeader, plus discret
@@ -106,13 +116,15 @@ async def lifespan(app: FastAPI):
     try:
         # app.state : emplacement fourni par FastAPI/Starlette pour stocker un objet partagé
         # entre toutes les requêtes, initialisé une fois ici plutôt que dans chaque route.
-        app.state.chain = build_chain()
+        # total_vectors stocké séparément (pas recalculé) : réutilisé par GET /metadata.
+        app.state.chain, app.state.total_vectors = build_chain()
     except Exception as exc:
         # Sans ce print, l'échec est totalement invisible (ni logs, ni erreur) — impossible à
         # diagnostiquer depuis "docker logs" ou le terminal. Même raisonnement que pour
         # run_rebuild_pipeline() : visible côté serveur, jamais renvoyé au client (503 générique).
         print(f"[lifespan] échec de build_chain() au démarrage : {exc}")
         app.state.chain = None
+        app.state.total_vectors = None
     app.state.rebuild_status = RebuildStatus(state="idle")
     # Tout ce qui est avant "yield" s'exécute au démarrage du serveur, une seule fois.
     # Tout ce qui serait après (rien ici) s'exécuterait à l'arrêt du serveur.
@@ -140,6 +152,23 @@ def health() -> dict:
     RAG — un problème sur /ask (voir chain is None) ne doit pas faire croire que le SERVEUR
     lui-même est en panne à un outil de supervision qui interrogerait cette route."""
     return {"status": "ok"}
+
+
+@app.get("/metadata", response_model=MetadataResponse, summary="Consulter l'état des données actuellement servies")
+def metadata() -> MetadataResponse:
+    """État des données actuellement chargées en mémoire — pas l'état du pipeline (voir /rebuild).
+
+    events_indexed vient de app.state.total_vectors, mis à jour à chaque (re)construction de la
+    chaîne (lifespan() au démarrage, run_rebuild_pipeline() après un /rebuild) — reflète donc
+    toujours l'index réellement en mémoire, même si ce dernier a été (re)construit manuellement
+    en local avant le démarrage du serveur, pas seulement via /rebuild (contrairement au compteur
+    de GET /rebuild, qui ne se met à jour qu'après une reconstruction déclenchée par l'API).
+    """
+    return MetadataResponse(
+        events_indexed=app.state.total_vectors,
+        geographic_coverage=fetch_events.LOCATION_DEPARTMENT,
+        chain_available=app.state.chain is not None,
+    )
 
 
 # response_model=AskResponse : documente à FastAPI la forme exacte de la réponse, utilisée
@@ -191,7 +220,9 @@ def run_rebuild_pipeline() -> None:
         indexed_count = build_index.main()
         # Reconstruit la chaîne à partir du nouvel index sur disque — app.state.chain (utilisé
         # par /ask) pointe alors vers les données à jour, sans redémarrage du processus.
-        app.state.chain = build_chain()
+        # app.state.total_vectors mis à jour ici aussi (pas seulement dans lifespan()) : sans
+        # ça, GET /metadata resterait figé sur le compte de démarrage après un /rebuild.
+        app.state.chain, app.state.total_vectors = build_chain()
         app.state.rebuild_status = RebuildStatus(
             state="done",
             started_at=app.state.rebuild_status.started_at,

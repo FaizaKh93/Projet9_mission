@@ -266,8 +266,13 @@ def retrieve_context(question: str, vector_store: FAISS, api_key: str, total_vec
     return build_period_note(filters, today) + format_docs(docs, today, date_range)
 
 
-def build_chain():
-    """Construire la chaîne RAG complète (extraction de filtres + recherche hybride + prompt + LLM)."""
+def build_chain() -> tuple:
+    """Construire la chaîne RAG complète (extraction de filtres + recherche hybride + prompt + LLM).
+
+    Renvoie (chain, total_vectors) — total_vectors (déjà calculé pour fetch_k, voir plus bas)
+    exposé en plus de la chaîne pour que l'appelant puisse le réutiliser (ex. api/main.py::/metadata)
+    sans recharger l'index FAISS une seconde fois juste pour compter les vecteurs.
+    """
     api_key = get_api_key()
 
     # Étape 1 : préparer le modèle d'embeddings — le même qu'à l'indexation, pour que la
@@ -307,7 +312,7 @@ def build_chain():
     # question + date du jour -> réponse fixe (contexte vide) ou prompt rempli -> LLM -> texte
     # final. "current_date" et "context" sont recalculés à CHAQUE question posée : ces fonctions
     # ne s'exécutent qu'au moment de chain.invoke(), jamais à la construction de la chaîne.
-    return (
+    chain = (
         {
             "context": lambda question: retrieve_context(question, vector_store, api_key, total_vectors),
             "question": RunnablePassthrough(),
@@ -315,11 +320,12 @@ def build_chain():
         }
         | RunnableLambda(generate_or_refuse)
     )
+    return chain, total_vectors
 
 
 def answer_question(question: str) -> str:
     """Poser une question à la chaîne RAG et renvoyer la réponse générée."""
-    chain = build_chain()
+    chain, _ = build_chain()
     return chain.invoke(question)
 
 

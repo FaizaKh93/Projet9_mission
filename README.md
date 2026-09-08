@@ -240,9 +240,48 @@ Démarre l'API sur `http://127.0.0.1:8000`. Documentation Swagger interactive g�
 |---|---|---|
 | `/` | GET | Informations générales, pointeur vers `/docs`. |
 | `/health` | GET | Vérification de disponibilité du serveur, indépendante de l'état de la chaîne RAG. |
+| `/metadata` | GET | État des données **actuellement chargées en mémoire** (`events_indexed`, `geographic_coverage`, `chain_available`) — pas de clé requise, lecture seule. Différent de `GET /rebuild` (ci-dessous), qui décrit l'état du *processus* de reconstruction, pas les données réellement en mémoire : `events_indexed` ici vient de `app.state.total_vectors`, mis à jour à chaque construction de la chaîne (démarrage **et** après un `/rebuild`), donc toujours à jour même si le dernier index a été construit manuellement en local, pas via l'API. Après un `POST /rebuild`, le nouveau compte n'apparaît qu'une fois le pipeline réellement terminé (`GET /rebuild` → `"state": "done"`), pas dès le `202` immédiat renvoyé par `POST /rebuild`. |
 | `/ask` | POST | Corps `{"question": "..."}` → réponse générée. `422` si la question est vide/absente, `503` si la chaîne n'a pas pu être construite au démarrage, `502` en cas d'échec du service Mistral. |
 | `/rebuild` | POST | **Nécessite l'en-tête HTTP `X-API-Key`**, avec la valeur de `X_API_KEY` définie dans `.env` — sans elle, `401 Unauthorized`. Relance le pipeline complet (`fetch_events` → `preprocess_events` → `vectorize_events` → `build_index`) en tâche de fond et recharge la chaîne RAG, sans redémarrer le serveur. Répond immédiatement `202 Accepted`, sans attendre la fin du pipeline (plusieurs minutes, appel payant à Mistral). `409 Conflict` si un rebuild est déjà en cours. |
 | `/rebuild` | GET | Consulte l'état de la dernière reconstruction (`idle`/`running`/`done`/`error`) — pas de clé requise, lecture seule. |
+
+**Exemples curl** (serveur démarré en local, voir plus haut) :
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+```bash
+curl http://127.0.0.1:8000/metadata
+```
+
+```bash
+curl -X POST http://127.0.0.1:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Quels concerts de musique classique y a-t-il à Marseille ?"}'
+```
+
+```bash
+curl -X POST http://127.0.0.1:8000/rebuild \
+  -H "X-API-Key: <valeur de X_API_KEY dans .env>"
+```
+
+```bash
+curl http://127.0.0.1:8000/rebuild
+```
+
+**Exemple Python** (`requests`, déjà présent dans les dépendances transitives — sinon `uv add requests`) :
+
+```python
+import requests
+
+response = requests.post(
+    "http://127.0.0.1:8000/ask",
+    json={"question": "Quels concerts de musique classique y a-t-il à Marseille ?"},
+)
+response.raise_for_status()
+print(response.json()["answer"])
+```
 
 ## Conteneurisation (Étape 6)
 
@@ -308,7 +347,7 @@ Génère `htmlcov/index.html` (gitignoré, régénérable). Couverture répartie
 uv run python eval/evaluate_rag.py
 ```
 
-`notebooks/06_rag_evaluation.ipynb` charge `eval/eval_results.json` (résultats déjà calculés, pas de nouvel appel Mistral) pour une présentation lisible des scores — pensé pour la soutenance, sans dépendance réseau.
+`notebooks/06_rag_evaluation.ipynb` charge `eval/eval_results.json` (résultats déjà calculés, pas de nouvel appel Mistral) pour une présentation lisible des scores 
 
 Chaque `source_event_uids` de `qa_dataset_manual.json` a été vérifié à la main contre l'événement réel correspondant dans `data/processed/events.json` (titre, dates, tarif, texte) au moment de la rédaction du jeu de test — pas juste supposé correct.
 
@@ -327,17 +366,12 @@ Moyennes sur les 15 questions de `qa_dataset_manual.json` (`eval/eval_results.js
 
 **Context recall** et **answer correctness** sont structurellement bas, et c'est attendu plutôt qu'un signe de mauvaise qualité : ces deux métriques comparent la réponse à LA SEULE `reference_answer` du jeu de test, qui ne cite qu'un exemple réel parmi plusieurs événements valides pour les questions larges (ex. « Qu'est-ce qu'il y a à faire à Marseille ce mois-ci ? »). Le chatbot répond alors avec d'autres événements tout aussi valides mais absents de cette référence unique — d'où un score bas malgré une réponse correcte, vérifié manuellement en comparant plusieurs réponses générées aux données réelles.
 
-**Limite à noter pour la soutenance** : le juge Ragas (LLM) n'est pas parfaitement déterministe même à `temperature=0` — deux exécutions successives sur les mêmes réponses générées (texte identique) ont donné des scores de faithfulness différents pour 3 questions (ex. 0.90 puis 0.32 pour la même réponse). Les scores ci-dessus donnent donc un ordre de grandeur, pas une mesure à la décimale près.
+**Limite à noter** : le juge Ragas (LLM) n'est pas parfaitement déterministe même à `temperature=0` — deux exécutions successives sur les mêmes réponses générées (texte identique) ont donné des scores de faithfulness différents pour 3 questions (ex. 0.90 puis 0.32 pour la même réponse). Les scores ci-dessus donnent donc un ordre de grandeur, pas une mesure à la décimale près.
 
-## Statut
+## Perspectives
 
-Étape 1 — configuration de l'environnement (terminée).
-Étape 2 — pré-processing des données Open Agenda (terminée : récupération, nettoyage, tests unitaires, découpage en chunks, vectorisation — 4241 événements en 7169 chunks vectorisés dans `data/vectors/events_vectors.json`).
-Étape 3 — base de données vectorielle FAISS (terminée : index construit via `FAISS.from_embeddings()` à partir des vecteurs déjà calculés, 7169/7169 vecteurs vérifiés, tests de recherche effectués dans `notebooks/04_search_evaluation.ipynb`).
-Étape 4 — chaîne RAG (recherche + génération) : `scripts/rag_chain.py` + `scripts/query_filters.py` (recherche hybride filtre+sémantique, événements récurrents, affichage enrichi des métadonnées — voir plus haut). Terminée (mergée sur `main`).
-Étape 5 — API REST (terminée) : `api/main.py` (FastAPI, endpoints `/`, `/health`, `/ask`, `/rebuild` — voir plus haut). Jeu de test annoté (15 paires, `eval/qa_dataset_manual.json`) + évaluation automatisée (Ragas, `eval/evaluate_rag.py`) terminés (voir section "Évaluation" plus haut) — non demandés explicitement par l'Étape 5, ajoutés après coup.
-Étape 6 — conteneurisation (terminée) : `Dockerfile`/`.dockerignore` (voir section "Conteneurisation" plus haut), `/ask` et `/rebuild` vérifiés fonctionnels dans le conteneur (volume `data/` monté, clés transmises via `--env-file`). Deux bugs trouvés et corrigés en testant le déploiement : hallucination sur un contexte vide, calcul de date pour un jour de semaine cité seul (voir section "Chaîne RAG" plus haut).
-
-Au-delà des étapes numérotées : jeu de test annoté + évaluation Ragas complets (voir "Évaluation" plus haut), 3 bugs supplémentaires trouvés et corrigés pendant cette évaluation (récidive de l'hallucination sur contexte vide, filtre ville sensible à la casse, date affichée incohérente pour un événement récurrent — voir section "Chaîne RAG"), intégration continue (GitHub Actions, voir section "Tests"), schéma d'architecture (voir section "Architecture" plus haut). Couverture de tests sans trou hors appels réseau réels (voir section Tests, chiffres exacts non figés ici — se régénèrent via la commande fournie).
-
-Restent : scénarios de démo pour la soutenance, présentation, section "Résultats" consolidée dans ce README (synthèse des scores d'évaluation), exemples curl pour l'API.
+- **Mémoire conversationnelle** — Ajouter un historique de conversation à la chaîne (ex. `RunnableWithMessageHistory` de LangChain, qui réinjecte les échanges précédents dans le prompt) pour résoudre les questions de suivi comme "l'url de cet événement ?".
+- **Rafraîchissement automatique** — Programmer l'appel à `POST /rebuild` sur un intervalle régulier (ex. un workflow GitHub Actions déclenché chaque nuit via `on: schedule`) pour garder la base à jour sans intervention manuelle.
+- **Jeu de test élargi** — Étendre `qa_dataset_manual.json` au-delà de 15 questions (ex. ajouter des paires ciblant des combinaisons de filtres encore peu couvertes, comme ville + âge + mode ensemble).
+- **Ground truth multi-référence** — Remplacer la réponse de référence unique par plusieurs réponses valides par question (ex. lister tous les `source_event_uids` acceptables au lieu d'un seul dans `qa_dataset_manual.json`) pour que `context_recall`/`answer_correctness` reflètent mieux les questions à plusieurs bonnes réponses.
+- **Second juge Ragas** — Recalculer les mêmes métriques avec un second modèle comme juge (ex. relancer `evaluate_rag.py` en remplaçant le LLM évaluateur par un autre modèle) pour distinguer un vrai signal de qualité du bruit de non-déterminisme déjà constaté ci-dessus.
