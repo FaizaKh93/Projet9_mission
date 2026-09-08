@@ -368,6 +368,10 @@ Moyennes sur les 15 questions de `qa_dataset_manual.json` (`eval/eval_results.js
 
 **Limite à noter** : le juge Ragas (LLM) n'est pas parfaitement déterministe même à `temperature=0` — deux exécutions successives sur les mêmes réponses générées (texte identique) ont donné des scores de faithfulness différents pour 3 questions (ex. 0.90 puis 0.32 pour la même réponse). Les scores ci-dessus donnent donc un ordre de grandeur, pas une mesure à la décimale près.
 
+**Taux de réponse acceptable** : 10/13 (77%) des questions jugeables ont faithfulness ET answer_relevancy ≥ 0.7 (seuil robuste : net écart entre 0.32–0.33 et 0.89+). Les 2 questions hors-zone/hors-sujet sont exclues du calcul — leur refus correct donne un faithfulness/answer_relevancy à 0.0 non interprétable, pas un échec (voir plus haut). Détail reproductible dans `notebooks/06_rag_evaluation.ipynb`.
+
+**Couverture des événements** : pas mesurée comme une métrique séparée — `context_recall` en tient déjà lieu au niveau du jeu de test (est-ce que les bons événements source sont bien retrouvés pour chaque question), voir plus haut. Une vraie mesure de couverture du corpus entier (quelle proportion des 4241 événements est un jour réellement retrouvable par une question) demanderait une analyse bien plus lourde, hors du périmètre de ce POC.
+
 ## Perspectives
 
 - **Mémoire conversationnelle** — Ajouter un historique de conversation à la chaîne (ex. `RunnableWithMessageHistory` de LangChain, qui réinjecte les échanges précédents dans le prompt) pour résoudre les questions de suivi comme "l'url de cet événement ?".
