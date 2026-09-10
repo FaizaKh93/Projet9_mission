@@ -1,5 +1,7 @@
 # Projet9 — POC Chatbot RAG pour Puls-Events
 
+Dépôt GitHub : [github.com/FaizaKh93/Projet9_mission](https://github.com/FaizaKh93/Projet9_mission)
+
 POC d'un chatbot capable de répondre à des questions sur des événements culturels à venir, à partir des données de l'[API Open Agenda](https://openagenda.com/), en s'appuyant sur un système RAG (Retrieval-Augmented Generation) combinant recherche vectorielle (FAISS) et génération de réponse en langage naturel (Mistral) orchestrés via LangChain, exposé par une API REST (FastAPI).
 
 # Structure du projet
@@ -99,7 +101,7 @@ sequenceDiagram
 Prérequis : [uv](https://docs.astral.sh/uv/) installé, Python géré automatiquement par uv (version pinnée dans `.python-version`).
 
 ```bash
-git clone <url-du-repo>
+git clone https://github.com/FaizaKh93/Projet9_mission.git
 cd Projet9_mission
 uv sync
 ```
@@ -181,7 +183,7 @@ Exclus, avec une vraie raison à chaque fois :
 uv run python scripts/vectorize_events.py
 ```
 
-Découpe le texte de chaque événement en chunks (`langchain_text_splitters`, les textes courts ne produisent le plus souvent qu'un seul chunk) et génère leurs embeddings via l'API Mistral (`mistral-embed`, payant — nécessite `MISTRAL_API_KEY` dans `.env`). Sauvegarde le résultat dans `data/vectors/events_vectors.json`, prêt à être indexé, sans construire l'index FAISS lui-même (fait par `build_index.py`, juste après). Coût estimé sur ce dataset : ~0,08 $ pour 4241 événements.
+Découpe le texte de chaque événement en chunks (`langchain_text_splitters`, les textes courts ne produisent le plus souvent qu'un seul chunk) et génère leurs embeddings via l'API Mistral (`mistral-embed`, payant — nécessite `MISTRAL_API_KEY` dans `.env`). Sauvegarde le résultat dans `data/vectors/events_vectors.json`, prêt à être indexé, sans construire l'index FAISS lui-même (fait par `build_index.py`, juste après). Coût estimé sur ce dataset : ~0,08 $ pour 4241 événements — chiffres donnés à titre indicatif : `fetch_events.py` filtre sur "moins d'un an" par rapport à la date du jour, donc le nombre d'événements (et le coût) évolue à chaque rafraîchissement des données (relance manuelle des scripts, ou `POST /rebuild`).
 
 ```bash
 uv run python scripts/build_index.py
